@@ -212,6 +212,32 @@
             height: calc(100% - 130px); /* Reserve space for controls */
             overflow: hidden;
         }
+        /* Player ready status indicators */
+        .player-status {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 15px;
+        }
+        .status-indicator {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+            text-align: center;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+        }
+        .status-ready {
+            background-color: rgba(50, 200, 50, 0.7);
+        }
+        .status-waiting {
+            background-color: rgba(200, 50, 50, 0.7);
+        }
+        /* Restart button when already clicked */
+        #restartBtn.clicked {
+            background-color: #888;
+            cursor: default;
+        }
     </style>
 </head>
 <body>
@@ -229,6 +255,10 @@
         
         <div id="winnerMessage">
             <div id="winnerText"></div>
+            <div class="player-status">
+                <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
+                <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
+            </div>
             <button id="restartBtn">Play Again</button>
         </div>
         
@@ -245,6 +275,7 @@
         let playerId;
         let players = {};
         let gameStarted = false;
+        let playerReady = false;
         const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
         
         // Game constants
@@ -344,12 +375,58 @@
                     if (state.winner) {
                         showWinner(state.winner);
                     }
+                    
+                    // Update player ready status if available
+                    if (state.readyPlayers) {
+                        updateReadyStatus(state.readyPlayers);
+                    }
+                });
+                
+                // Listen for player ready status updates
+                socket.on('playerReady', function(readyPlayers) {
+                    updateReadyStatus(readyPlayers);
                 });
             } catch (error) {
                 console.error('Error connecting to server:', error);
                 document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
                 // Try to reconnect after 3 seconds
                 setTimeout(connectToServer, 3000);
+            }
+        }
+        
+        function updateReadyStatus(readyPlayers) {
+            const player1Status = document.getElementById('player1Status');
+            const player2Status = document.getElementById('player2Status');
+            
+            // Update Player 1 status
+            if (readyPlayers.includes('player1')) {
+                player1Status.textContent = 'Player 1: Ready';
+                player1Status.className = 'status-indicator status-ready';
+            } else {
+                player1Status.textContent = 'Player 1: Waiting';
+                player1Status.className = 'status-indicator status-waiting';
+            }
+            
+            // Update Player 2 status
+            if (readyPlayers.includes('player2')) {
+                player2Status.textContent = 'Player 2: Ready';
+                player2Status.className = 'status-indicator status-ready';
+            } else {
+                player2Status.textContent = 'Player 2: Waiting';
+                player2Status.className = 'status-indicator status-waiting';
+            }
+            
+            // Update our local ready state
+            playerReady = readyPlayers.includes(playerId);
+            
+            // Update restart button state
+            const restartBtn = document.getElementById('restartBtn');
+            if (playerReady) {
+                restartBtn.textContent = 'Waiting for other player...';
+                restartBtn.classList.add('clicked');
+            } else {
+                restartBtn.textContent = 'Play Again';
+                restartBtn.classList.remove('clicked');
             }
         }
         
@@ -631,9 +708,17 @@
                     e.preventDefault();
                     e.stopPropagation();
                     
-                    if (socket) {
-                        socket.emit('restart');
-                        document.getElementById('winnerMessage').style.display = 'none';
+                    // Only allow clicking if not already ready
+                    if (!playerReady && socket) {
+                        // Send ready signal to server
+                        socket.emit('playerReady', playerId);
+                        
+                        // Update button state
+                        this.textContent = 'Waiting for other player...';
+                        this.classList.add('clicked');
+                        
+                        // Update local ready state
+                        playerReady = true;
                     }
                 });
             });
@@ -853,6 +938,20 @@
             
             winnerText.textContent = `${winner} wins!`;
             winnerMessage.style.display = 'block';
+            
+            // Reset player ready status
+            playerReady = false;
+            
+            // Reset button state
+            const restartBtn = document.getElementById('restartBtn');
+            restartBtn.textContent = 'Play Again';
+            restartBtn.classList.remove('clicked');
+            
+            // Reset status indicators
+            document.getElementById('player1Status').className = 'status-indicator status-waiting';
+            document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+            document.getElementById('player2Status').className = 'status-indicator status-waiting';
+            document.getElementById('player2Status').textContent = 'Player 2: Waiting';
         }
     </script>
 </body>
