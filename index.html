@@ -237,12 +237,31 @@
         .status-ready {
             color: #55ff55;
         }
+        /* Sound control styles */
+        #soundControl {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 30;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="playerIndicator"></div>
         <div id="debugInfo"></div>
+        <div id="soundControl">🔊</div>
         
         <div id="gameArea">
             <canvas id="gameCanvas"></canvas>
@@ -277,6 +296,11 @@
         let readyPlayers = []; // Track which players are ready
         const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
         
+        // Sound variables
+        let soundEnabled = true;
+        let sounds = {};
+        let soundsLoaded = false;
+        
         // Game constants
         const PLAYER_WIDTH = 30;
         const PLAYER_HEIGHT = 80;
@@ -310,6 +334,12 @@
             resizeCanvas();
             window.addEventListener('resize', resizeCanvas);
             
+            // Load sounds
+            loadSounds();
+            
+            // Set up sound control
+            setupSoundControl();
+            
             // Connect to server automatically
             connectToServer();
             
@@ -319,6 +349,81 @@
             // Start game loop
             requestAnimationFrame(gameLoop);
         };
+        
+        // Load all game sounds
+        function loadSounds() {
+            const soundFiles = {
+                hit: 'https://assets.codepen.io/21542/punch.mp3',
+                kick: 'https://assets.codepen.io/21542/kick.mp3',
+                hurt: 'https://assets.codepen.io/21542/grunt.mp3',
+                victory: 'https://assets.codepen.io/21542/victory.mp3',
+                gameStart: 'https://assets.codepen.io/21542/fight.mp3',
+                button: 'https://assets.codepen.io/21542/button.mp3'
+            };
+            
+            let loadedCount = 0;
+            const totalSounds = Object.keys(soundFiles).length;
+            
+            // Create audio objects for each sound
+            for (const [name, url] of Object.entries(soundFiles)) {
+                sounds[name] = new Audio();
+                sounds[name].src = url;
+                
+                // Handle loading
+                sounds[name].addEventListener('canplaythrough', () => {
+                    loadedCount++;
+                    if (loadedCount === totalSounds) {
+                        soundsLoaded = true;
+                        console.log('All sounds loaded');
+                    }
+                });
+                
+                // Handle errors
+                sounds[name].addEventListener('error', (e) => {
+                    console.error(`Error loading sound ${name}:`, e);
+                });
+                
+                // Preload the sound
+                sounds[name].load();
+            }
+        }
+        
+        // Play a sound with error handling
+        function playSound(name) {
+            if (!soundEnabled || !soundsLoaded) return;
+            
+            try {
+                // Create a clone to allow overlapping sounds
+                const sound = sounds[name].cloneNode();
+                sound.volume = 0.5; // Set volume to 50%
+                
+                // Play the sound with a promise and catch any errors
+                const playPromise = sound.play();
+                
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => {
+                        console.warn(`Sound play error (${name}):`, error);
+                    });
+                }
+            } catch (error) {
+                console.error(`Error playing sound ${name}:`, error);
+            }
+        }
+        
+        // Set up sound control button
+        function setupSoundControl() {
+            const soundControl = document.getElementById('soundControl');
+            
+            soundControl.addEventListener('click', function() {
+                soundEnabled = !soundEnabled;
+                this.textContent = soundEnabled ? '🔊' : '🔇';
+                
+                // Play a sound to confirm it's working
+                if (soundEnabled) {
+                    playSound('button');
+                }
+            });
+        }
         
         function resizeCanvas() {
             // Get the gameArea dimensions
@@ -363,6 +468,13 @@
                 });
                 
                 socket.on('gameState', function(state) {
+                    // Check if game just started
+                    const gameJustStarted = !gameStarted && state.gameStarted;
+                    
+                    // Track player states to detect hits and kicks
+                    const prevPlayers = {...players};
+                    
+                    // Update game state
                     players = state.players;
                     gameStarted = state.gameStarted;
                     
@@ -370,9 +482,46 @@
                     document.getElementById('waitingMessage').style.display = 
                         gameStarted ? 'none' : 'block';
                     
+                    // Play game start sound if game just started
+                    if (gameJustStarted) {
+                        playSound('gameStart');
+                    }
+                    
+                    // Play sound effects based on state changes
+                    if (prevPlayers.player1 && players.player1) {
+                        // Player 1 hit
+                        if (prevPlayers.player1.state !== HITTING && players.player1.state === HITTING) {
+                            playSound('hit');
+                        }
+                        // Player 1 kick
+                        if (prevPlayers.player1.state !== KICKING && players.player1.state === KICKING) {
+                            playSound('kick');
+                        }
+                        // Player 1 hurt
+                        if (prevPlayers.player1.state !== HURT && players.player1.state === HURT) {
+                            playSound('hurt');
+                        }
+                    }
+                    
+                    if (prevPlayers.player2 && players.player2) {
+                        // Player 2 hit
+                        if (prevPlayers.player2.state !== HITTING && players.player2.state === HITTING) {
+                            playSound('hit');
+                        }
+                        // Player 2 kick
+                        if (prevPlayers.player2.state !== KICKING && players.player2.state === KICKING) {
+                            playSound('kick');
+                        }
+                        // Player 2 hurt
+                        if (prevPlayers.player2.state !== HURT && players.player2.state === HURT) {
+                            playSound('hurt');
+                        }
+                    }
+                    
                     // Check for winner
                     if (state.winner) {
                         showWinner(state.winner);
+                        playSound('victory');
                     } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
                         // Game has been reset, hide winner message
                         document.getElementById('winnerMessage').style.display = 'none';
@@ -406,6 +555,9 @@
                         restartBtn.textContent = 'Waiting for other player...';
                         restartBtn.disabled = true;
                     }
+                    
+                    // Play button sound when a player gets ready
+                    playSound('button');
                 });
             } catch (error) {
                 console.error('Error connecting to server:', error);
@@ -706,6 +858,9 @@
                 e.stopPropagation();
                 
                 if (socket && playerId) {
+                    // Play button sound
+                    playSound('button');
+                    
                     // Send player ready status to server
                     socket.emit('playerReady', playerId);
                     
