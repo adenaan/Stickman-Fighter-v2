@@ -29,7 +29,7 @@
         }
         .controls {
             position: fixed;
-            bottom: 20px;
+            bottom: 30px; /* Increased from 20px to move controls lower */
             width: 100%;
             padding: 0 10px;
             box-sizing: border-box;
@@ -40,6 +40,7 @@
         .player-controls {
             display: flex;
             gap: 12px;
+            margin-bottom: 15px; /* Extra margin at the bottom */
         }
         .control-btn {
             width: 65px;
@@ -53,7 +54,6 @@
             touch-action: manipulation;
             user-select: none;
             -webkit-user-select: none;
-            margin-bottom: 15px;
         }
         @media (max-width: 480px) {
             .control-btn {
@@ -139,12 +139,24 @@
             z-index: 30;
             text-align: center;
         }
+        /* Add a game area container to help with positioning */
+        #gameArea {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: calc(100% - 130px); /* Reserve space for controls */
+            overflow: hidden;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="playerIndicator"></div>
-        <canvas id="gameCanvas"></canvas>
+        
+        <div id="gameArea">
+            <canvas id="gameCanvas"></canvas>
+        </div>
         
         <div class="controls" id="controlsContainer">
             <!-- Control buttons will be added here dynamically -->
@@ -206,8 +218,11 @@
         };
         
         function resizeCanvas() {
-            gameWidth = window.innerWidth;
-            gameHeight = window.innerHeight;
+            // Get the gameArea dimensions
+            const gameArea = document.getElementById('gameArea');
+            gameWidth = gameArea.clientWidth;
+            gameHeight = gameArea.clientHeight;
+            
             canvas.width = gameWidth;
             canvas.height = gameHeight;
         }
