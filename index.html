@@ -163,6 +163,12 @@
             box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
             background-color: #3e8e41;
         }
+        #restartBtn:disabled {
+            background-color: #888;
+            cursor: default;
+            transform: none;
+            box-shadow: none;
+        }
         #waitingMessage {
             position: fixed;
             top: 50%;
@@ -212,31 +218,24 @@
             height: calc(100% - 130px); /* Reserve space for controls */
             overflow: hidden;
         }
-        /* Player ready status indicators */
+        /* Player ready status styles */
         .player-status {
+            margin-top: 10px;
             display: flex;
             justify-content: space-between;
             width: 100%;
-            margin-bottom: 15px;
         }
         .status-indicator {
             padding: 5px 10px;
             border-radius: 5px;
             font-size: 14px;
-            text-align: center;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-        }
-        .status-ready {
-            background-color: rgba(50, 200, 50, 0.7);
+            font-weight: bold;
         }
         .status-waiting {
-            background-color: rgba(200, 50, 50, 0.7);
+            color: #ff5555;
         }
-        /* Restart button when already clicked */
-        #restartBtn.clicked {
-            background-color: #888;
-            cursor: default;
+        .status-ready {
+            color: #55ff55;
         }
     </style>
 </head>
@@ -275,7 +274,7 @@
         let playerId;
         let players = {};
         let gameStarted = false;
-        let playerReady = false;
+        let readyPlayers = []; // Track which players are ready
         const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
         
         // Game constants
@@ -374,17 +373,39 @@
                     // Check for winner
                     if (state.winner) {
                         showWinner(state.winner);
-                    }
-                    
-                    // Update player ready status if available
-                    if (state.readyPlayers) {
-                        updateReadyStatus(state.readyPlayers);
+                    } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
+                        // Game has been reset, hide winner message
+                        document.getElementById('winnerMessage').style.display = 'none';
+                        
+                        // Reset button state
+                        const restartBtn = document.getElementById('restartBtn');
+                        restartBtn.textContent = 'Play Again';
+                        restartBtn.disabled = false;
+                        
+                        // Reset player status indicators
+                        document.getElementById('player1Status').className = 'status-indicator status-waiting';
+                        document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+                        document.getElementById('player2Status').className = 'status-indicator status-waiting';
+                        document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+                        
+                        // Clear ready players array
+                        readyPlayers = [];
                     }
                 });
                 
                 // Listen for player ready status updates
-                socket.on('playerReady', function(readyPlayers) {
-                    updateReadyStatus(readyPlayers);
+                socket.on('playerReady', function(players) {
+                    readyPlayers = players;
+                    updateReadyStatus();
+                    
+                    debug("Ready players: " + JSON.stringify(readyPlayers));
+                    
+                    // If this player is ready, update button state
+                    if (readyPlayers.includes(playerId)) {
+                        const restartBtn = document.getElementById('restartBtn');
+                        restartBtn.textContent = 'Waiting for other player...';
+                        restartBtn.disabled = true;
+                    }
                 });
             } catch (error) {
                 console.error('Error connecting to server:', error);
@@ -394,39 +415,25 @@
             }
         }
         
-        function updateReadyStatus(readyPlayers) {
+        function updateReadyStatus() {
+            // Update player 1 status
             const player1Status = document.getElementById('player1Status');
-            const player2Status = document.getElementById('player2Status');
-            
-            // Update Player 1 status
             if (readyPlayers.includes('player1')) {
-                player1Status.textContent = 'Player 1: Ready';
                 player1Status.className = 'status-indicator status-ready';
+                player1Status.textContent = 'Player 1: Ready';
             } else {
-                player1Status.textContent = 'Player 1: Waiting';
                 player1Status.className = 'status-indicator status-waiting';
+                player1Status.textContent = 'Player 1: Waiting';
             }
             
-            // Update Player 2 status
+            // Update player 2 status
+            const player2Status = document.getElementById('player2Status');
             if (readyPlayers.includes('player2')) {
-                player2Status.textContent = 'Player 2: Ready';
                 player2Status.className = 'status-indicator status-ready';
+                player2Status.textContent = 'Player 2: Ready';
             } else {
-                player2Status.textContent = 'Player 2: Waiting';
                 player2Status.className = 'status-indicator status-waiting';
-            }
-            
-            // Update our local ready state
-            playerReady = readyPlayers.includes(playerId);
-            
-            // Update restart button state
-            const restartBtn = document.getElementById('restartBtn');
-            if (playerReady) {
-                restartBtn.textContent = 'Waiting for other player...';
-                restartBtn.classList.add('clicked');
-            } else {
-                restartBtn.textContent = 'Play Again';
-                restartBtn.classList.remove('clicked');
+                player2Status.textContent = 'Player 2: Waiting';
             }
         }
         
@@ -476,28 +483,24 @@
                 e.preventDefault();
                 this.classList.add('active');
                 if (socket) socket.emit('move', {direction: 'left'});
-                debug("Moving left: " + playerId);
             });
             
             newMoveRightBtn.addEventListener('touchstart', function(e) {
                 e.preventDefault();
                 this.classList.add('active');
                 if (socket) socket.emit('move', {direction: 'right'});
-                debug("Moving right: " + playerId);
             });
             
             newHitBtn.addEventListener('touchstart', function(e) {
                 e.preventDefault();
                 this.classList.add('active');
                 if (socket) socket.emit('attack', {type: 'hit'});
-                debug("Hitting: " + playerId);
             });
             
             newKickBtn.addEventListener('touchstart', function(e) {
                 e.preventDefault();
                 this.classList.add('active');
                 if (socket) socket.emit('attack', {type: 'kick'});
-                debug("Kicking: " + playerId);
             });
             
             // Add touch end event listeners
@@ -527,25 +530,21 @@
             newMoveLeftBtn.addEventListener('mousedown', function(e) {
                 this.classList.add('active');
                 if (socket) socket.emit('move', {direction: 'left'});
-                debug("Mouse moving left: " + playerId);
             });
             
             newMoveRightBtn.addEventListener('mousedown', function(e) {
                 this.classList.add('active');
                 if (socket) socket.emit('move', {direction: 'right'});
-                debug("Mouse moving right: " + playerId);
             });
             
             newHitBtn.addEventListener('mousedown', function(e) {
                 this.classList.add('active');
                 if (socket) socket.emit('attack', {type: 'hit'});
-                debug("Mouse hitting: " + playerId);
             });
             
             newKickBtn.addEventListener('mousedown', function(e) {
                 this.classList.add('active');
                 if (socket) socket.emit('attack', {type: 'kick'});
-                debug("Mouse kicking: " + playerId);
             });
             
             newMoveLeftBtn.addEventListener('mouseup', function(e) {
@@ -639,7 +638,6 @@
                     } else if (command.type === 'attack') {
                         socket.emit('attack', command.data);
                     }
-                    debug("Key " + e.key + ": " + command.type + " " + JSON.stringify(command.data));
                 }
             }
         }
@@ -702,25 +700,21 @@
         function setupRestartButton() {
             const restartBtn = document.getElementById('restartBtn');
             
-            // Add multiple event handlers to ensure it works on all devices
-            ['click', 'touchstart'].forEach(eventType => {
-                restartBtn.addEventListener(eventType, function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
+            // Add event handler for restart button
+            restartBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (socket && playerId) {
+                    // Send player ready status to server
+                    socket.emit('playerReady', playerId);
                     
-                    // Only allow clicking if not already ready
-                    if (!playerReady && socket) {
-                        // Send ready signal to server
-                        socket.emit('playerReady', playerId);
-                        
-                        // Update button state
-                        this.textContent = 'Waiting for other player...';
-                        this.classList.add('clicked');
-                        
-                        // Update local ready state
-                        playerReady = true;
-                    }
-                });
+                    // Update button state
+                    this.textContent = 'Waiting for other player...';
+                    this.disabled = true;
+                    
+                    debug("Sent playerReady: " + playerId);
+                }
             });
         }
         
@@ -939,19 +933,19 @@
             winnerText.textContent = `${winner} wins!`;
             winnerMessage.style.display = 'block';
             
-            // Reset player ready status
-            playerReady = false;
-            
-            // Reset button state
-            const restartBtn = document.getElementById('restartBtn');
-            restartBtn.textContent = 'Play Again';
-            restartBtn.classList.remove('clicked');
-            
-            // Reset status indicators
+            // Reset ready status indicators
             document.getElementById('player1Status').className = 'status-indicator status-waiting';
             document.getElementById('player1Status').textContent = 'Player 1: Waiting';
             document.getElementById('player2Status').className = 'status-indicator status-waiting';
             document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+            
+            // Reset restart button
+            const restartBtn = document.getElementById('restartBtn');
+            restartBtn.textContent = 'Play Again';
+            restartBtn.disabled = false;
+            
+            // Clear ready players array
+            readyPlayers = [];
         }
     </script>
 </body>
