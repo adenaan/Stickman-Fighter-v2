@@ -28,77 +28,91 @@
             left: 0;
         }
         .controls {
-            position: absolute;
+            position: fixed;
             bottom: 20px;
-            display: flex;
-            justify-content: space-between;
             width: 100%;
             padding: 0 10px;
             box-sizing: border-box;
             z-index: 10;
+            display: flex;
+            justify-content: center;
         }
         .player-controls {
             display: flex;
-            gap: 5px;
+            gap: 12px;
         }
         .control-btn {
-            width: 60px;
-            height: 60px;
+            width: 65px;
+            height: 65px;
             border-radius: 50%;
             border: none;
             background-color: rgba(255, 255, 255, 0.3);
             color: white;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 18px;
             touch-action: manipulation;
             user-select: none;
             -webkit-user-select: none;
+            margin-bottom: 15px;
         }
-        @media (max-width: 600px) {
+        @media (max-width: 480px) {
             .control-btn {
-                width: 50px;
-                height: 50px;
+                width: 55px;
+                height: 55px;
+                font-size: 16px;
+            }
+            .player-controls {
+                gap: 10px;
+            }
+        }
+        @media (max-width: 360px) {
+            .control-btn {
+                width: 45px;
+                height: 45px;
                 font-size: 14px;
             }
             .player-controls {
-                gap: 3px;
+                gap: 8px;
             }
         }
         .hit-btn {
-            background-color: rgba(255, 50, 50, 0.6);
+            background-color: rgba(255, 50, 50, 0.7);
         }
         .kick-btn {
-            background-color: rgba(50, 50, 255, 0.6);
+            background-color: rgba(50, 50, 255, 0.7);
         }
         .move-btn {
-            background-color: rgba(50, 200, 50, 0.6);
+            background-color: rgba(50, 200, 50, 0.7);
         }
         #winnerMessage {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 20px;
+            padding: 30px;
             border-radius: 10px;
             font-size: 24px;
             display: none;
             text-align: center;
             z-index: 20;
+            width: 80%;
+            max-width: 300px;
         }
         #restartBtn {
             margin-top: 20px;
-            padding: 10px 20px;
+            padding: 15px 30px;
             background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 18px;
+            touch-action: manipulation;
         }
         #waitingMessage {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -106,43 +120,34 @@
             color: white;
             padding: 20px;
             border-radius: 10px;
-            font-size: 24px;
+            font-size: 20px;
             text-align: center;
             z-index: 20;
+            width: 80%;
+            max-width: 300px;
         }
-        #debug {
-            position: absolute;
+        #playerIndicator {
+            position: fixed;
             top: 10px;
-            left: 10px;
+            left: 50%;
+            transform: translateX(-50%);
             background-color: rgba(0, 0, 0, 0.5);
             color: white;
-            padding: 5px;
+            padding: 5px 10px;
             border-radius: 5px;
-            font-size: 12px;
+            font-size: 16px;
             z-index: 30;
-            display: none;
+            text-align: center;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <div id="debug"></div>
+        <div id="playerIndicator"></div>
         <canvas id="gameCanvas"></canvas>
         
-        <div class="controls">
-            <div class="player-controls" id="player1Controls">
-                <button class="control-btn move-btn" id="p1Left">←</button>
-                <button class="control-btn move-btn" id="p1Right">→</button>
-                <button class="control-btn hit-btn" id="p1Hit">HIT</button>
-                <button class="control-btn kick-btn" id="p1Kick">KICK</button>
-            </div>
-            
-            <div class="player-controls" id="player2Controls">
-                <button class="control-btn hit-btn" id="p2Hit">HIT</button>
-                <button class="control-btn kick-btn" id="p2Kick">KICK</button>
-                <button class="control-btn move-btn" id="p2Left">←</button>
-                <button class="control-btn move-btn" id="p2Right">→</button>
-            </div>
+        <div class="controls" id="controlsContainer">
+            <!-- Control buttons will be added here dynamically -->
         </div>
         
         <div id="winnerMessage">
@@ -181,13 +186,6 @@
         const KICKING = 'kicking';
         const HURT = 'hurt';
         
-        // Debug function
-        function debugLog(text) {
-            const debug = document.getElementById('debug');
-            debug.style.display = 'block';
-            debug.textContent = text;
-        }
-        
         // Initialize the game
         window.onload = function() {
             canvas = document.getElementById('gameCanvas');
@@ -200,8 +198,8 @@
             // Connect to server automatically
             connectToServer();
             
-            // Set up controls
-            setupControls();
+            // Set up restart button with multiple event types
+            setupRestartButton();
             
             // Start game loop
             requestAnimationFrame(gameLoop);
@@ -237,7 +235,13 @@
                 socket.on('playerId', function(id) {
                     playerId = id;
                     console.log('Your player ID:', playerId);
-                    debugLog('Player ID: ' + playerId);
+                    
+                    // Show player indicator
+                    document.getElementById('playerIndicator').textContent = 
+                        id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
+                    
+                    // Set up controls for this player
+                    setupPlayerControls(id);
                 });
                 
                 socket.on('gameState', function(state) {
@@ -261,77 +265,94 @@
             }
         }
         
-        function setupControls() {
+        function setupPlayerControls(playerType) {
+            const controlsContainer = document.getElementById('controlsContainer');
+            
+            // Clear any existing controls
+            controlsContainer.innerHTML = '';
+            
+            // Create new control container
+            const playerControls = document.createElement('div');
+            playerControls.className = 'player-controls';
+            
+            if (playerType === 'player1') {
+                // Player 1 controls (Red)
+                playerControls.innerHTML = `
+                    <button class="control-btn move-btn" id="moveLeft">←</button>
+                    <button class="control-btn move-btn" id="moveRight">→</button>
+                    <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+                    <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+                `;
+            } else {
+                // Player 2 controls (Blue)
+                playerControls.innerHTML = `
+                    <button class="control-btn move-btn" id="moveLeft">←</button>
+                    <button class="control-btn move-btn" id="moveRight">→</button>
+                    <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+                    <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+                `;
+            }
+            
+            controlsContainer.appendChild(playerControls);
+            
+            // Setup touch event listeners
+            setupTouchControls(playerType);
+        }
+        
+        function setupTouchControls(playerType) {
             // Using event delegation for better mobile performance
-            document.addEventListener('touchstart', function(e) {
-                e.preventDefault(); // Prevent default to avoid zoom
-                
-                // Find the actual button target
-                let target = e.target;
-                while (target && !target.classList.contains('control-btn')) {
-                    if (target === document.body) return;
-                    target = target.parentElement;
-                }
-                
-                if (!target) return;
-                
-                // Player 1 controls
-                if (playerId === 'player1') {
-                    if (target.id === 'p1Left') socket.emit('move', {direction: 'left'});
-                    if (target.id === 'p1Right') socket.emit('move', {direction: 'right'});
-                    if (target.id === 'p1Hit') socket.emit('attack', {type: 'hit'});
-                    if (target.id === 'p1Kick') socket.emit('attack', {type: 'kick'});
-                }
-                
-                // Player 2 controls
-                if (playerId === 'player2') {
-                    if (target.id === 'p2Left') socket.emit('move', {direction: 'left'});
-                    if (target.id === 'p2Right') socket.emit('move', {direction: 'right'});
-                    if (target.id === 'p2Hit') socket.emit('attack', {type: 'hit'});
-                    if (target.id === 'p2Kick') socket.emit('attack', {type: 'kick'});
-                }
-            }, {passive: false});
+            document.addEventListener('touchstart', handleTouchStart);
+            document.addEventListener('touchend', handleTouchEnd);
             
-            document.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                
-                // Find the actual button target
-                let target = e.target;
-                while (target && !target.classList.contains('control-btn')) {
-                    if (target === document.body) return;
-                    target = target.parentElement;
-                }
-                
-                if (!target) return;
-                
-                if (playerId) {
-                    const isPlayer1 = playerId === 'player1';
-                    const isPlayer2 = playerId === 'player2';
-                    
-                    // Stop movement when direction buttons are released
-                    if ((isPlayer1 && (target.id === 'p1Left' || target.id === 'p1Right')) ||
-                        (isPlayer2 && (target.id === 'p2Left' || target.id === 'p2Right'))) {
-                        socket.emit('stopMove');
-                    }
-                }
-            }, {passive: false});
+            // Add keyboard controls for desktop testing
+            setupKeyboardControls(playerType);
+        }
+        
+        function handleTouchStart(e) {
+            if (!socket || !playerId) return;
             
-            // Restart button
-            document.getElementById('restartBtn').addEventListener('click', function() {
-                if (socket) socket.emit('restart');
-                document.getElementById('winnerMessage').style.display = 'none';
-            });
+            // Find the actual button target
+            let target = e.target;
+            if (!target.classList.contains('control-btn')) return;
             
-            // Add keyboard controls for testing on desktop
+            e.preventDefault(); // Prevent default to avoid zoom
+            
+            if (target.id === 'moveLeft') {
+                socket.emit('move', {direction: 'left'});
+            } else if (target.id === 'moveRight') {
+                socket.emit('move', {direction: 'right'});
+            } else if (target.id === 'hitBtn') {
+                socket.emit('attack', {type: 'hit'});
+            } else if (target.id === 'kickBtn') {
+                socket.emit('attack', {type: 'kick'});
+            }
+        }
+        
+        function handleTouchEnd(e) {
+            if (!socket || !playerId) return;
+            
+            // Find the actual button target
+            let target = e.target;
+            if (!target.classList.contains('control-btn')) return;
+            
+            e.preventDefault();
+            
+            // Stop movement when direction buttons are released
+            if (target.id === 'moveLeft' || target.id === 'moveRight') {
+                socket.emit('stopMove');
+            }
+        }
+        
+        function setupKeyboardControls(playerType) {
             window.addEventListener('keydown', function(e) {
-                if (!playerId || !socket) return;
+                if (!socket || !playerId) return;
                 
-                if (playerId === 'player1') {
+                if (playerType === 'player1') {
                     if (e.key === 'a') socket.emit('move', {direction: 'left'});
                     if (e.key === 'd') socket.emit('move', {direction: 'right'});
                     if (e.key === 'q') socket.emit('attack', {type: 'hit'});
                     if (e.key === 'e') socket.emit('attack', {type: 'kick'});
-                } else if (playerId === 'player2') {
+                } else if (playerType === 'player2') {
                     if (e.key === 'ArrowLeft') socket.emit('move', {direction: 'left'});
                     if (e.key === 'ArrowRight') socket.emit('move', {direction: 'right'});
                     if (e.key === ',') socket.emit('attack', {type: 'hit'});
@@ -340,13 +361,29 @@
             });
             
             window.addEventListener('keyup', function(e) {
-                if (!playerId || !socket) return;
+                if (!socket || !playerId) return;
                 
-                if (playerId === 'player1') {
-                    if (e.key === 'a' || e.key === 'd') socket.emit('stopMove');
-                } else if (playerId === 'player2') {
-                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') socket.emit('stopMove');
+                if ((playerType === 'player1' && (e.key === 'a' || e.key === 'd')) ||
+                    (playerType === 'player2' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight'))) {
+                    socket.emit('stopMove');
                 }
+            });
+        }
+        
+        function setupRestartButton() {
+            const restartBtn = document.getElementById('restartBtn');
+            
+            // Add multiple event handlers to ensure it works on all devices
+            ['click', 'touchstart'].forEach(eventType => {
+                restartBtn.addEventListener(eventType, function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    if (socket) {
+                        socket.emit('restart');
+                        document.getElementById('winnerMessage').style.display = 'none';
+                    }
+                });
             });
         }
         
