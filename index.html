@@ -2,853 +2,395 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Stickman Fighter</title>
-    <!-- Load Socket.io from CDN -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Fighting Game</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            touch-action: none;
-            background-color: #222;
             font-family: Arial, sans-serif;
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
+
         #gameContainer {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 800px;
+            height: 600px;
+            background-color: #fff;
+            border: 2px solid #000;
             overflow: hidden;
         }
+
         #gameCanvas {
-            background-color: #333;
             position: absolute;
             top: 0;
             left: 0;
-        }
-        .controls {
-            position: fixed;
-            bottom: 30px; /* Increased from 20px to move controls lower */
             width: 100%;
-            padding: 0 10px;
-            box-sizing: border-box;
-            z-index: 10;
-            display: flex;
-            justify-content: center;
+            height: 100%;
+            background-color: #eee;
         }
-        .player-controls {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 15px; /* Extra margin at the bottom */
-        }
-        .control-btn {
-            width: 65px;
-            height: 65px;
-            border-radius: 50%;
-            border: none;
-            background-color: rgba(255, 255, 255, 0.3);
-            color: white;
-            font-weight: bold;
-            font-size: 18px;
-            touch-action: manipulation;
-            user-select: none;
-            -webkit-user-select: none;
-            /* Add transition for smooth feedback */
-            transition: all 0.1s ease;
-            position: relative;
-            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
-        }
-        /* Button press effect */
-        .control-btn.active {
-            transform: scale(0.95) translateY(4px);
-            box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
-        }
-        @media (max-width: 480px) {
-            .control-btn {
-                width: 55px;
-                height: 55px;
-                font-size: 16px;
-            }
-            .player-controls {
-                gap: 10px;
-            }
-        }
-        @media (max-width: 360px) {
-            .control-btn {
-                width: 45px;
-                height: 45px;
-                font-size: 14px;
-            }
-            .player-controls {
-                gap: 8px;
-            }
-        }
-        .hit-btn {
-            background-color: rgba(255, 50, 50, 0.7);
-        }
-        .hit-btn.active {
-            background-color: rgba(255, 50, 50, 0.9);
-        }
-        .kick-btn {
-            background-color: rgba(50, 50, 255, 0.7);
-        }
-        .kick-btn.active {
-            background-color: rgba(50, 50, 255, 0.9);
-        }
-        .move-btn {
-            background-color: rgba(50, 200, 50, 0.7);
-        }
-        .move-btn.active {
-            background-color: rgba(50, 200, 50, 0.9);
-        }
-        /* Button ripple effect */
-        .control-btn::after {
-            content: '';
+
+        #waitingMessage {
             position: absolute;
             top: 50%;
             left: 50%;
-            width: 5px;
-            height: 5px;
-            background: rgba(255, 255, 255, 0.5);
-            opacity: 0;
-            border-radius: 100%;
-            transform: scale(1, 1) translate(-50%, -50%);
-            transform-origin: 50% 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #888;
         }
-        .control-btn.active::after {
-            animation: ripple 0.4s ease-out;
-        }
-        @keyframes ripple {
-            0% {
-                transform: scale(0, 0) translate(-50%, -50%);
-                opacity: 0.5;
-            }
-            100% {
-                transform: scale(20, 20) translate(-50%, -50%);
-                opacity: 0;
-            }
-        }
+
         #winnerMessage {
-            position: fixed;
+            position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            font-size: 24px;
-            display: none;
-            text-align: center;
-            z-index: 20;
-            width: 80%;
-            max-width: 300px;
+            font-size: 36px;
+            color: green;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
         }
+
         #restartBtn {
-            margin-top: 20px;
-            padding: 15px 30px;
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 18px;
             background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 18px;
-            touch-action: manipulation;
-            transition: all 0.1s ease;
-            box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
         }
-        #restartBtn:active {
-            transform: scale(0.95) translateY(4px);
-            box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
-            background-color: #3e8e41;
-        }
+
         #restartBtn:disabled {
-            background-color: #888;
-            cursor: default;
-            transform: none;
-            box-shadow: none;
+            background-color: #ccc;
+            cursor: not-allowed;
         }
-        #waitingMessage {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 20px;
-            text-align: center;
-            z-index: 20;
-            width: 80%;
-            max-width: 300px;
-        }
-        #playerIndicator {
-            position: fixed;
+
+        .status-indicator {
+            position: absolute;
             top: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
             padding: 5px 10px;
             border-radius: 5px;
-            font-size: 16px;
-            z-index: 30;
-            text-align: center;
-        }
-        #debugInfo {
-            position: fixed;
-            top: 40px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.5);
             color: white;
-            padding: 5px;
-            border-radius: 5px;
-            font-size: 12px;
-            z-index: 30;
-            display: none;
         }
-        /* Add a game area container to help with positioning */
-        #gameArea {
-            position: absolute;
-            top: 0;
+
+        .status-waiting {
+            background-color: #aaa;
+        }
+
+        .status-ready {
+            background-color: #4CAF50;
+        }
+
+        #player1Status {
+            left: 10px;
+        }
+
+        #player2Status {
+            right: 10px;
+        }
+
+        /* Debug console */
+        #debugConsole {
+            position: fixed;
+            bottom: 0;
             left: 0;
             width: 100%;
-            height: calc(100% - 130px); /* Reserve space for controls */
-            overflow: hidden;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px;
+            font-size: 12px;
+            overflow-y: scroll;
+            max-height: 100px;
+            z-index: 1000;
         }
-        /* Player ready status styles */
-        .player-status {
-            margin-top: 10px;
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-        }
-        .status-indicator {
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        .status-waiting {
-            color: #ff5555;
-        }
-        .status-ready {
-            color: #55ff55;
-        }
-        /* Sound control styles */
-        #soundControl {
+
+        /* Sound control button */
+        #soundToggle {
             position: fixed;
             top: 10px;
             right: 10px;
             background-color: rgba(0, 0, 0, 0.5);
             color: white;
-            padding: 5px;
+            border: none;
             border-radius: 5px;
-            z-index: 30;
-            cursor: pointer;
-            width: 30px;
-            height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 40px;
+            height: 40px;
             font-size: 20px;
+            cursor: pointer;
+            z-index: 100;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <div id="playerIndicator"></div>
-        <div id="debugInfo"></div>
-        <div id="soundControl">🔊</div>
-        
-        <div id="gameArea">
-            <canvas id="gameCanvas"></canvas>
-        </div>
-        
-        <div class="controls" id="controlsContainer">
-            <!-- Control buttons will be added here dynamically -->
-        </div>
-        
-        <div id="winnerMessage">
-            <div id="winnerText"></div>
-            <div class="player-status">
-                <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
-                <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
-            </div>
-            <button id="restartBtn">Play Again</button>
-        </div>
-        
-        <div id="waitingMessage">
-            Connecting to server...
-        </div>
+        <button id="soundToggle">🔊</button>
+        <canvas id="gameCanvas"></canvas>
+        <div id="waitingMessage">Waiting for another player...</div>
+        <div id="winnerMessage"></div>
+        <button id="restartBtn">Play Again</button>
+        <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
+        <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
     </div>
+    <div id="debugConsole"></div>
 
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn4ZEO3Qt/HFklTJBj/gBOV8G3HcKn4NfQblz" crossorigin="anonymous"></script>
     <script>
-        // Game variables
+        const canvasWidth = 800;
+        const canvasHeight = 600;
         let canvas, ctx;
-        let gameWidth, gameHeight;
         let socket;
         let playerId;
         let players = {};
         let gameStarted = false;
-        let readyPlayers = []; // Track which players are ready
+        let readyPlayers = [];
         const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
-        
-        // Sound variables
-        let soundEnabled = true;
+
+        // Sound system
         let sounds = {};
-        let soundsLoaded = false;
-        
-        // Game constants
-        const PLAYER_WIDTH = 30;
-        const PLAYER_HEIGHT = 80;
-        const PLAYER_SPEED = 5;
-        const MAX_POWER = 100;
-        const HIT_DAMAGE = 10;
-        const KICK_DAMAGE = 15;
-        const HIT_RANGE = 40;
-        const KICK_RANGE = 50;
-        
-        // Animation states
-        const IDLE = 'idle';
-        const HITTING = 'hitting';
-        const KICKING = 'kicking';
-        const HURT = 'hurt';
-        
-        // Debug function
-        function debug(message) {
-            const debugElement = document.getElementById('debugInfo');
-            debugElement.style.display = 'block';
-            debugElement.textContent = message;
-            console.log(message);
-        }
-        
-        // Initialize the game
-        window.onload = function() {
-            canvas = document.getElementById('gameCanvas');
-            ctx = canvas.getContext('2d');
-            
-            // Set canvas size
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            
-            // Load sounds
-            loadSounds();
-            
-            // Set up sound control
-            setupSoundControl();
-            
-            // Connect to server automatically
-            connectToServer();
-            
-            // Set up restart button with multiple event types
-            setupRestartButton();
-            
-            // Start game loop
-            requestAnimationFrame(gameLoop);
+        let soundsLoaded = 0;
+        let totalSounds = 0;
+        let soundsEnabled = true;
+
+        // Sound file paths - replace these with your custom audio paths
+        const SOUND_PATHS = {
+            hit: '/assets/hit.mp3',
+            kick: '/assets/kick.mp3',
+            hurt: '/assets/hurt.mp3',
+            victory: '/assets/victory.mp3',
+            gameStart: '/assets/game-start.mp3',
+            button: '/assets/button-click.mp3'
         };
-        
-        // Load all game sounds
+
+        let prevGameStarted = false;
+
+        function debug(message) {
+            const debugConsole = document.getElementById('debugConsole');
+            debugConsole.textContent += message + '\n';
+            debugConsole.scrollTop = debugConsole.scrollHeight; // Auto-scroll to bottom
+        }
+
+        // Load all sounds
         function loadSounds() {
-            const soundFiles = {
-                hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-                kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-                hurt: 'https://assets.codepen.io/21542/grunt.mp3',
-                victory: 'https://assets.codepen.io/21542/victory.mp3',
-                gameStart: 'https://assets.codepen.io/21542/fight.mp3',
-                button: 'https://assets.codepen.io/21542/button.mp3'
-            };
+            totalSounds = Object.keys(SOUND_PATHS).length;
+            soundsLoaded = 0;
             
-            let loadedCount = 0;
-            const totalSounds = Object.keys(soundFiles).length;
+            for (const [name, path] of Object.entries(SOUND_PATHS)) {
+                loadSound(name, path);
+            }
             
-            // Create audio objects for each sound
-            for (const [name, url] of Object.entries(soundFiles)) {
-                sounds[name] = new Audio();
-                sounds[name].src = url;
+            // Initialize audio system on mobile devices (requires user interaction)
+            document.addEventListener('touchstart', initAudioForMobile, { once: true });
+        }
+
+        // Load individual sound
+        function loadSound(name, path) {
+            try {
+                const audio = new Audio();
+                audio.volume = 0.5; // 50% volume by default
                 
-                // Handle loading
-                sounds[name].addEventListener('canplaythrough', () => {
-                    loadedCount++;
-                    if (loadedCount === totalSounds) {
-                        soundsLoaded = true;
-                        console.log('All sounds loaded');
+                // When sound is loaded
+                audio.addEventListener('canplaythrough', function onCanPlay() {
+                    soundsLoaded++;
+                    audio.removeEventListener('canplaythrough', onCanPlay);
+                    debug(`Loaded sound: ${name}, ${soundsLoaded}/${totalSounds}`);
+                    
+                    // Initialize first sound after at least one is loaded
+                    if (soundsLoaded === 1) {
+                        initializeFirstSound();
                     }
                 });
                 
-                // Handle errors
-                sounds[name].addEventListener('error', (e) => {
-                    console.error(`Error loading sound ${name}:`, e);
+                // Error handling
+                audio.addEventListener('error', function(e) {
+                    console.error(`Error loading sound ${name} from ${path}:`, e);
+                    // Still count this sound as "loaded" to prevent hanging
+                    soundsLoaded++;
                 });
                 
-                // Preload the sound
-                sounds[name].load();
+                audio.src = path;
+                audio.load();
+                sounds[name] = audio;
+            } catch (e) {
+                console.error(`Could not create audio for ${name}:`, e);
+                soundsLoaded++;
             }
         }
-        
-        // Play a sound with error handling
-        function playSound(name) {
-            if (!soundEnabled || !soundsLoaded) return;
-            
+
+        // Initialize first sound (helps with mobile audio)
+        function initializeFirstSound() {
+            debug('Initializing first sound');
             try {
-                // Create a clone to allow overlapping sounds
-                const sound = sounds[name].cloneNode();
-                sound.volume = 0.5; // Set volume to 50%
-                
-                // Play the sound with a promise and catch any errors
-                const playPromise = sound.play();
-                
-                if (playPromise !== undefined) {
-                    playPromise.catch(error => {
-                        console.warn(`Sound play error (${name}):`, error);
+                // Try to play and immediately pause first sound to initialize audio system
+                const firstSound = Object.values(sounds)[0];
+                if (firstSound) {
+                    firstSound.play().then(() => {
+                        firstSound.pause();
+                        firstSound.currentTime = 0;
+                    }).catch(e => {
+                        console.warn('Could not auto-initialize sound (this is normal on mobile):', e);
                     });
                 }
-            } catch (error) {
-                console.error(`Error playing sound ${name}:`, error);
+            } catch (e) {
+                console.warn('Error initializing first sound:', e);
             }
         }
-        
-        // Set up sound control button
-        function setupSoundControl() {
-            const soundControl = document.getElementById('soundControl');
-            
-            soundControl.addEventListener('click', function() {
-                soundEnabled = !soundEnabled;
-                this.textContent = soundEnabled ? '🔊' : '🔇';
-                
-                // Play a sound to confirm it's working
-                if (soundEnabled) {
-                    playSound('button');
-                }
-            });
-        }
-        
-        function resizeCanvas() {
-            // Get the gameArea dimensions
-            const gameArea = document.getElementById('gameArea');
-            gameWidth = gameArea.clientWidth;
-            gameHeight = gameArea.clientHeight;
-            
-            canvas.width = gameWidth;
-            canvas.height = gameHeight;
-        }
-        
-        function connectToServer() {
+
+        // Initialize audio on mobile (called on first touch)
+        function initAudioForMobile() {
+            debug('Initializing audio for mobile');
             try {
-                // Connect to the hardcoded Glitch server
-                socket = io(GLITCH_SERVER_URL, {
-                    transports: ['websocket', 'polling'],
-                    reconnectionAttempts: 5
-                });
+                // Try to play and immediately pause a sound to unlock audio on iOS
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 
-                socket.on('connect', function() {
-                    console.log('Connected to server');
-                    document.getElementById('waitingMessage').textContent = 'Waiting for another player to join...';
-                });
+                // Create and play a silent buffer
+                const buffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start(0);
                 
-                socket.on('connect_error', function(error) {
-                    console.error('Connection error:', error);
-                    document.getElementById('waitingMessage').textContent = 'Connection error. Please try again.';
-                    // Try to reconnect after 3 seconds
-                    setTimeout(connectToServer, 3000);
-                });
-                
-                socket.on('playerId', function(id) {
-                    playerId = id;
-                    console.log('Your player ID:', playerId);
-                    
-                    // Show player indicator
-                    document.getElementById('playerIndicator').textContent = 
-                        id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
-                    
-                    // Set up controls for this player
-                    setupPlayerControls();
-                });
-                
-                socket.on('gameState', function(state) {
-                    // Check if game just started
-                    const gameJustStarted = !gameStarted && state.gameStarted;
-                    
-                    // Track player states to detect hits and kicks
-                    const prevPlayers = {...players};
-                    
-                    // Update game state
-                    players = state.players;
-                    gameStarted = state.gameStarted;
-                    
-                    // Show/hide waiting message
-                    document.getElementById('waitingMessage').style.display = 
-                        gameStarted ? 'none' : 'block';
-                    
-                    // Play game start sound if game just started
-                    if (gameJustStarted) {
-                        playSound('gameStart');
-                    }
-                    
-                    // Play sound effects based on state changes
-                    if (prevPlayers.player1 && players.player1) {
-                        // Player 1 hit
-                        if (prevPlayers.player1.state !== HITTING && players.player1.state === HITTING) {
-                            playSound('hit');
-                        }
-                        // Player 1 kick
-                        if (prevPlayers.player1.state !== KICKING && players.player1.state === KICKING) {
-                            playSound('kick');
-                        }
-                        // Player 1 hurt
-                        if (prevPlayers.player1.state !== HURT && players.player1.state === HURT) {
-                            playSound('hurt');
-                        }
-                    }
-                    
-                    if (prevPlayers.player2 && players.player2) {
-                        // Player 2 hit
-                        if (prevPlayers.player2.state !== HITTING && players.player2.state === HITTING) {
-                            playSound('hit');
-                        }
-                        // Player 2 kick
-                        if (prevPlayers.player2.state !== KICKING && players.player2.state === KICKING) {
-                            playSound('kick');
-                        }
-                        // Player 2 hurt
-                        if (prevPlayers.player2.state !== HURT && players.player2.state === HURT) {
-                            playSound('hurt');
-                        }
-                    }
-                    
-                    // Check for winner
-                    if (state.winner) {
-                        showWinner(state.winner);
-                        playSound('victory');
-                    } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
-                        // Game has been reset, hide winner message
-                        document.getElementById('winnerMessage').style.display = 'none';
-                        
-                        // Reset button state
-                        const restartBtn = document.getElementById('restartBtn');
-                        restartBtn.textContent = 'Play Again';
-                        restartBtn.disabled = false;
-                        
-                        // Reset player status indicators
-                        document.getElementById('player1Status').className = 'status-indicator status-waiting';
-                        document.getElementById('player1Status').textContent = 'Player 1: Waiting';
-                        document.getElementById('player2Status').className = 'status-indicator status-waiting';
-                        document.getElementById('player2Status').textContent = 'Player 2: Waiting';
-                        
-                        // Clear ready players array
-                        readyPlayers = [];
+                // Try to play each sound briefly
+                Object.values(sounds).forEach(sound => {
+                    try {
+                        sound.play().then(() => {
+                            sound.pause();
+                            sound.currentTime = 0;
+                        }).catch(e => {
+                            console.warn('Could not initialize sound on mobile:', e);
+                        });
+                    } catch (e) { 
+                        console.warn('Error with sound on mobile:', e);
                     }
                 });
+            } catch (e) {
+                console.warn('Could not initialize AudioContext:', e);
+            }
+        }
+
+        // Play a sound with optional volume
+        function playSound(name, volume = 0.5) {
+            if (!soundsEnabled) return;
+            
+            try {
+                const sound = sounds[name];
+                if (!sound) {
+                    console.warn(`Sound '${name}' not found`);
+                    return;
+                }
                 
-                // Listen for player ready status updates
-                socket.on('playerReady', function(players) {
-                    readyPlayers = players;
-                    updateReadyStatus();
-                    
-                    debug("Ready players: " + JSON.stringify(readyPlayers));
-                    
-                    // If this player is ready, update button state
-                    if (readyPlayers.includes(playerId)) {
-                        const restartBtn = document.getElementById('restartBtn');
-                        restartBtn.textContent = 'Waiting for other player...';
-                        restartBtn.disabled = true;
-                    }
-                    
-                    // Play button sound when a player gets ready
-                    playSound('button');
+                // Clone the audio to allow overlapping sounds
+                const soundClone = sound.cloneNode();
+                soundClone.volume = volume;
+                
+                soundClone.play().catch(e => {
+                    console.warn(`Could not play sound '${name}':`, e);
                 });
-            } catch (error) {
-                console.error('Error connecting to server:', error);
-                document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
-                // Try to reconnect after 3 seconds
-                setTimeout(connectToServer, 3000);
+            } catch (e) {
+                console.warn(`Error playing sound '${name}':`, e);
             }
         }
-        
-        function updateReadyStatus() {
-            // Update player 1 status
-            const player1Status = document.getElementById('player1Status');
-            if (readyPlayers.includes('player1')) {
-                player1Status.className = 'status-indicator status-ready';
-                player1Status.textContent = 'Player 1: Ready';
-            } else {
-                player1Status.className = 'status-indicator status-waiting';
-                player1Status.textContent = 'Player 1: Waiting';
+
+        // Toggle sound on/off
+        function toggleSound() {
+            soundsEnabled = !soundsEnabled;
+            const soundToggle = document.getElementById('soundToggle');
+            
+            if (soundToggle) {
+                soundToggle.textContent = soundsEnabled ? '🔊' : '🔇';
             }
             
-            // Update player 2 status
-            const player2Status = document.getElementById('player2Status');
-            if (readyPlayers.includes('player2')) {
-                player2Status.className = 'status-indicator status-ready';
-                player2Status.textContent = 'Player 2: Ready';
-            } else {
-                player2Status.className = 'status-indicator status-waiting';
-                player2Status.textContent = 'Player 2: Waiting';
-            }
-        }
-        
-        function setupPlayerControls() {
-            const controlsContainer = document.getElementById('controlsContainer');
-            
-            // Clear any existing controls
-            controlsContainer.innerHTML = '';
-            
-            // Create new control container
-            const playerControls = document.createElement('div');
-            playerControls.className = 'player-controls';
-            playerControls.innerHTML = `
-                <button class="control-btn move-btn" id="moveLeft">←</button>
-                <button class="control-btn move-btn" id="moveRight">→</button>
-                <button class="control-btn hit-btn" id="hitBtn">HIT</button>
-                <button class="control-btn kick-btn" id="kickBtn">KICK</button>
-            `;
-            
-            controlsContainer.appendChild(playerControls);
-            
-            // Setup touch event listeners
-            setupControlEventListeners();
-        }
-        
-        function setupControlEventListeners() {
-            // Get all control buttons
-            const moveLeftBtn = document.getElementById('moveLeft');
-            const moveRightBtn = document.getElementById('moveRight');
-            const hitBtn = document.getElementById('hitBtn');
-            const kickBtn = document.getElementById('kickBtn');
-            
-            // Clear any existing event listeners (just in case)
-            moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
-            moveRightBtn.replaceWith(moveRightBtn.cloneNode(true));
-            hitBtn.replaceWith(hitBtn.cloneNode(true));
-            kickBtn.replaceWith(kickBtn.cloneNode(true));
-            
-            // Get the fresh elements
-            const newMoveLeftBtn = document.getElementById('moveLeft');
-            const newMoveRightBtn = document.getElementById('moveRight');
-            const newHitBtn = document.getElementById('hitBtn');
-            const newKickBtn = document.getElementById('kickBtn');
-            
-            // Add touch start event listeners
-            newMoveLeftBtn.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                this.classList.add('active');
-                if (socket) socket.emit('move', {direction: 'left'});
-            });
-            
-            newMoveRightBtn.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                this.classList.add('active');
-                if (socket) socket.emit('move', {direction: 'right'});
-            });
-            
-            newHitBtn.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                this.classList.add('active');
-                if (socket) socket.emit('attack', {type: 'hit'});
-            });
-            
-            newKickBtn.addEventListener('touchstart', function(e) {
-                e.preventDefault();
-                this.classList.add('active');
-                if (socket) socket.emit('attack', {type: 'kick'});
-            });
-            
-            // Add touch end event listeners
-            newMoveLeftBtn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                this.classList.remove('active');
-                if (socket) socket.emit('stopMove');
-            });
-            
-            newMoveRightBtn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                this.classList.remove('active');
-                if (socket) socket.emit('stopMove');
-            });
-            
-            newHitBtn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                this.classList.remove('active');
-            });
-            
-            newKickBtn.addEventListener('touchend', function(e) {
-                e.preventDefault();
-                this.classList.remove('active');
-            });
-            
-            // For mouse users (testing)
-            newMoveLeftBtn.addEventListener('mousedown', function(e) {
-                this.classList.add('active');
-                if (socket) socket.emit('move', {direction: 'left'});
-            });
-            
-            newMoveRightBtn.addEventListener('mousedown', function(e) {
-                this.classList.add('active');
-                if (socket) socket.emit('move', {direction: 'right'});
-            });
-            
-            newHitBtn.addEventListener('mousedown', function(e) {
-                this.classList.add('active');
-                if (socket) socket.emit('attack', {type: 'hit'});
-            });
-            
-            newKickBtn.addEventListener('mousedown', function(e) {
-                this.classList.add('active');
-                if (socket) socket.emit('attack', {type: 'kick'});
-            });
-            
-            newMoveLeftBtn.addEventListener('mouseup', function(e) {
-                this.classList.remove('active');
-                if (socket) socket.emit('stopMove');
-            });
-            
-            newMoveRightBtn.addEventListener('mouseup', function(e) {
-                this.classList.remove('active');
-                if (socket) socket.emit('stopMove');
-            });
-            
-            newHitBtn.addEventListener('mouseup', function(e) {
-                this.classList.remove('active');
-            });
-            
-            newKickBtn.addEventListener('mouseup', function(e) {
-                this.classList.remove('active');
-            });
-            
-            // Setup keyboard controls
-            setupKeyboardControls();
-        }
-        
-        function setupKeyboardControls() {
-            // Remove any existing event listeners
-            window.removeEventListener('keydown', handleKeyDown);
-            window.removeEventListener('keyup', handleKeyUp);
-            
-            // Add event listeners
-            window.addEventListener('keydown', handleKeyDown);
-            window.addEventListener('keyup', handleKeyUp);
-        }
-        
-        function handleKeyDown(e) {
-            if (!socket || !playerId) return;
-            
-            let buttonId = null;
-            let command = null;
-            
-            // Player 1 controls
-            if (playerId === 'player1') {
-                if (e.key === 'a') {
-                    buttonId = 'moveLeft';
-                    command = {type: 'move', data: {direction: 'left'}};
-                }
-                else if (e.key === 'd') {
-                    buttonId = 'moveRight';
-                    command = {type: 'move', data: {direction: 'right'}};
-                }
-                else if (e.key === 'q') {
-                    buttonId = 'hitBtn';
-                    command = {type: 'attack', data: {type: 'hit'}};
-                }
-                else if (e.key === 'e') {
-                    buttonId = 'kickBtn';
-                    command = {type: 'attack', data: {type: 'kick'}};
-                }
-            }
-            // Player 2 controls
-            else if (playerId === 'player2') {
-                if (e.key === 'ArrowLeft') {
-                    buttonId = 'moveLeft';
-                    command = {type: 'move', data: {direction: 'left'}};
-                }
-                else if (e.key === 'ArrowRight') {
-                    buttonId = 'moveRight';
-                    command = {type: 'move', data: {direction: 'right'}};
-                }
-                else if (e.key === ',') {
-                    buttonId = 'hitBtn';
-                    command = {type: 'attack', data: {type: 'hit'}};
-                }
-                else if (e.key === '.') {
-                    buttonId = 'kickBtn';
-                    command = {type: 'attack', data: {type: 'kick'}};
-                }
+            // Play a sound if we just enabled sounds
+            if (soundsEnabled) {
+                playSound('button');
             }
             
-            // Add active class to the button
-            if (buttonId) {
-                const button = document.getElementById(buttonId);
-                if (button && !button.classList.contains('active')) {
-                    button.classList.add('active');
+            debug(`Sounds ${soundsEnabled ? 'enabled' : 'disabled'}`);
+        }
+
+        function connectToServer() {
+            socket = io(GLITCH_SERVER_URL, { transports: ['websocket'] });
+
+            socket.on('connect', () => {
+                playerId = socket.id;
+                debug("Connected to server with ID: " + playerId);
+            });
+
+            socket.on('gameState', function(state) {
+                // Keep track of previous player states to detect changes
+                const prevPlayer1State = players.player1 ? players.player1.state : null;
+                const prevPlayer2State = players.player2 ? players.player2.state : null;
+                
+                players = state.players;
+                gameStarted = state.gameStarted;
+                
+                // Play sound when game starts
+                if (gameStarted && !prevGameStarted) {
+                    playSound('gameStart');
+                    prevGameStarted = true;
+                } else if (!gameStarted) {
+                    prevGameStarted = false;
                 }
                 
-                // Send command to server
-                if (command) {
-                    if (command.type === 'move') {
-                        socket.emit('move', command.data);
-                    } else if (command.type === 'attack') {
-                        socket.emit('attack', command.data);
-                    }
+                // Play sounds based on state changes
+                if (players.player1 && prevPlayer1State !== players.player1.state) {
+                    if (players.player1.state === 'hitting') playSound('hit');
+                    if (players.player1.state === 'kicking') playSound('kick');
+                    if (players.player1.state === 'hurt') playSound('hurt');
                 }
-            }
-        }
-        
-        function handleKeyUp(e) {
-            if (!socket || !playerId) return;
-            
-            let buttonId = null;
-            let shouldStopMove = false;
-            
-            // Player 1 controls
-            if (playerId === 'player1') {
-                if (e.key === 'a') {
-                    buttonId = 'moveLeft';
-                    shouldStopMove = true;
-                }
-                else if (e.key === 'd') {
-                    buttonId = 'moveRight';
-                    shouldStopMove = true;
-                }
-                else if (e.key === 'q') {
-                    buttonId = 'hitBtn';
-                }
-                else if (e.key === 'e') {
-                    buttonId = 'kickBtn';
-                }
-            }
-            // Player 2 controls
-            else if (playerId === 'player2') {
-                if (e.key === 'ArrowLeft') {
-                    buttonId = 'moveLeft';
-                    shouldStopMove = true;
-                }
-                else if (e.key === 'ArrowRight') {
-                    buttonId = 'moveRight';
-                    shouldStopMove = true;
-                }
-                else if (e.key === ',') {
-                    buttonId = 'hitBtn';
-                }
-                else if (e.key === '.') {
-                    buttonId = 'kickBtn';
-                }
-            }
-            
-            // Remove active class from the button
-            if (buttonId) {
-                const button = document.getElementById(buttonId);
-                if (button) {
-                    button.classList.remove('active');
+                if (players.player2 && prevPlayer2State !== players.player2.state) {
+                    if (players.player2.state === 'hitting') playSound('hit');
+                    if (players.player2.state === 'kicking') playSound('kick');
+                    if (players.player2.state === 'hurt') playSound('hurt');
                 }
                 
-                // Stop movement if needed
-                if (shouldStopMove) {
-                    socket.emit('stopMove');
+                // Show/hide waiting message
+                document.getElementById('waitingMessage').style.display = 
+                    gameStarted ? 'none' : 'block';
+                
+                // Check for winner
+                if (state.winner) {
+                    showWinner(state.winner);
+                    playSound('victory');
+                } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
+                    // Game has been reset, hide winner message
+                    document.getElementById('winnerMessage').style.display = 'none';
+                    
+                    // Reset button state
+                    const restartBtn = document.getElementById('restartBtn');
+                    restartBtn.textContent = 'Play Again';
+                    restartBtn.disabled = false;
+                    
+                    // Reset player status indicators
+                    document.getElementById('player1Status').className = 'status-indicator status-waiting';
+                    document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+                    document.getElementById('player2Status').className = 'status-indicator status-waiting';
+                    document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+                    
+                    // Clear ready players array
+                    readyPlayers = [];
                 }
-            }
+            });
+
+            socket.on('playerJoined', (newPlayerId) => {
+                debug("Player joined with ID: " + newPlayerId);
+            });
+
+            socket.on('playerDisconnected', (disconnectedPlayerId) => {
+                debug("Player disconnected with ID: " + disconnectedPlayerId);
+            });
         }
-        
+
         function setupRestartButton() {
             const restartBtn = document.getElementById('restartBtn');
             
@@ -857,10 +399,10 @@
                 e.preventDefault();
                 e.stopPropagation();
                 
+                // Play button sound
+                playSound('button');
+                
                 if (socket && playerId) {
-                    // Play button sound
-                    playSound('button');
-                    
                     // Send player ready status to server
                     socket.emit('playerReady', playerId);
                     
@@ -872,236 +414,97 @@
                 }
             });
         }
-        
-        function gameLoop() {
-            // Clear canvas
-            ctx.clearRect(0, 0, gameWidth, gameHeight);
-            
-            if (gameStarted) {
-                // Draw game elements
-                drawBackground();
-                drawPlayers();
-                drawPowerBars();
-            }
-            
-            // Continue the game loop
-            requestAnimationFrame(gameLoop);
-        }
-        
-        function drawBackground() {
-            // Draw floor
-            ctx.fillStyle = '#555';
-            ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
-            
-            // Draw background elements
-            ctx.fillStyle = '#444';
-            for (let i = 0; i < 5; i++) {
-                ctx.fillRect(gameWidth * i / 5, gameHeight - 150, 10, 100);
-            }
-        }
-        
-        function drawPlayers() {
-            if (!players.player1 || !players.player2) return;
-            
-            // Calculate scale factor based on screen width to keep players visible
-            const scaleFactor = Math.min(1, gameWidth / 800);
-            const floorY = gameHeight - 50;
-            
-            // Adjust player positions for smaller screens
-            const p1ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player1.x * scaleFactor));
-            const p2ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player2.x * scaleFactor));
-            
-            // Draw player 1
-            drawStickman(
-                p1ScreenX, 
-                floorY - PLAYER_HEIGHT, 
-                '#FF5555', 
-                players.player1.state, 
-                false
-            );
-            
-            // Draw player 2
-            drawStickman(
-                p2ScreenX, 
-                floorY - PLAYER_HEIGHT, 
-                '#5555FF', 
-                players.player2.state, 
-                true
-            );
-        }
-        
-        function drawStickman(x, y, color, state, facingLeft) {
-            ctx.save();
-            
-            // Flip if facing left
-            if (facingLeft) {
-                ctx.translate(x + PLAYER_WIDTH / 2, 0);
-                ctx.scale(-1, 1);
-                ctx.translate(-x - PLAYER_WIDTH / 2, 0);
-            }
-            
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            // Head
-            ctx.beginPath();
-            ctx.arc(x + PLAYER_WIDTH / 2, y + 10, 10, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            // Body
-            ctx.beginPath();
-            ctx.moveTo(x + PLAYER_WIDTH / 2, y + 20);
-            ctx.lineTo(x + PLAYER_WIDTH / 2, y + 50);
-            ctx.stroke();
-            
-            // Arms
-            if (state === HITTING) {
-                // Hitting pose
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20);
-                ctx.lineTo(x + PLAYER_WIDTH + 15, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + 5, y + 40);
-                ctx.stroke();
-            } else if (state === KICKING) {
-                // Kicking pose
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + 5, y + 25);
-                ctx.stroke();
-            } else {
-                // Normal pose
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-                ctx.lineTo(x + 5, y + 25);
-                ctx.stroke();
-            }
-            
-            // Legs
-            if (state === KICKING) {
-                // Kicking pose
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-                ctx.lineTo(x + 10, y + 70);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-                ctx.lineTo(x + PLAYER_WIDTH + 20, y + 60);
-                ctx.stroke();
-            } else {
-                // Normal pose
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-                ctx.lineTo(x + 10, y + 70);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-                ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70);
-                ctx.stroke();
-            }
-            
-            // If hurt, draw stars around head
-            if (state === HURT) {
-                ctx.strokeStyle = 'yellow';
-                for (let i = 0; i < 3; i++) {
-                    const angle = Math.PI * 2 * i / 3;
-                    const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * 20;
-                    const starY = y + 10 + Math.sin(angle) * 20;
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(starX - 5, starY);
-                    ctx.lineTo(starX + 5, starY);
-                    ctx.stroke();
-                    
-                    ctx.beginPath();
-                    ctx.moveTo(starX, starY - 5);
-                    ctx.lineTo(starX, starY + 5);
-                    ctx.stroke();
-                }
-            }
-            
-            ctx.restore();
-        }
-        
-        function drawPowerBars() {
-            if (!players.player1 || !players.player2) return;
-            
-            const barHeight = 15;
-            const margin = 10;
-            
-            // Responsive bar width based on screen size
-            const barWidth = Math.min(200, (gameWidth / 2) - 20);
-            
-            // Player 1 power bar
-            ctx.fillStyle = '#333';
-            ctx.fillRect(margin, margin, barWidth, barHeight);
-            
-            ctx.fillStyle = '#FF5555';
-            const p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
-            ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
-            
-            ctx.strokeStyle = '#FFF';
-            ctx.strokeRect(margin, margin, barWidth, barHeight);
-            
-            ctx.fillStyle = '#FFF';
-            ctx.font = '12px Arial';
-            ctx.fillText('Player 1', margin, margin + barHeight + 12);
-            
-            // Player 2 power bar
-            ctx.fillStyle = '#333';
-            ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-            
-            ctx.fillStyle = '#5555FF';
-            const p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
-            ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
-            
-            ctx.strokeStyle = '#FFF';
-            ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-            
-            ctx.fillStyle = '#FFF';
-            ctx.font = '12px Arial';
-            ctx.fillText('Player 2', gameWidth - margin - barWidth, margin + barHeight + 12);
-        }
-        
+
         function showWinner(winner) {
             const winnerMessage = document.getElementById('winnerMessage');
-            const winnerText = document.getElementById('winnerText');
-            
-            winnerText.textContent = `${winner} wins!`;
+            winnerMessage.textContent = winner === playerId ? 'You Win!' : 'You Lose!';
             winnerMessage.style.display = 'block';
-            
-            // Reset ready status indicators
-            document.getElementById('player1Status').className = 'status-indicator status-waiting';
-            document.getElementById('player1Status').textContent = 'Player 1: Waiting';
-            document.getElementById('player2Status').className = 'status-indicator status-waiting';
-            document.getElementById('player2Status').textContent = 'Player 2: Waiting';
-            
-            // Reset restart button
-            const restartBtn = document.getElementById('restartBtn');
-            restartBtn.textContent = 'Play Again';
-            restartBtn.disabled = false;
-            
-            // Clear ready players array
-            readyPlayers = [];
         }
+
+        function resizeCanvas() {
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            draw(); // Redraw the scene after resizing
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw players
+            for (let id in players) {
+                let player = players[id];
+                drawStickman(player);
+            }
+        }
+
+        function drawStickman(player) {
+            if (!player) return;
+
+            ctx.save(); // Save the current drawing state
+
+            // Set the color based on player ID
+            ctx.fillStyle = player.id === playerId ? 'blue' : 'red';
+
+            // Draw the stickman's body
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, 20, 0, Math.PI * 2); // Head
+            ctx.moveTo(player.x, player.y + 20);
+            ctx.lineTo(player.x, player.y + 70); // Body
+            ctx.moveTo(player.x, player.y + 45);
+            ctx.lineTo(player.x - 25, player.y + 25); // Left arm
+            ctx.moveTo(player.x, player.y + 45);
+            ctx.lineTo(player.x + 25, player.y + 25); // Right arm
+            ctx.moveTo(player.x, player.y + 70);
+            ctx.lineTo(player.x - 25, player.y + 90); // Left leg
+            ctx.moveTo(player.x, player.y + 70);
+            ctx.lineTo(player.x + 25, player.y + 90); // Right leg
+            ctx.stroke();
+            ctx.fill();
+
+            // Draw sword if attacking
+            if (player.state === 'hitting') {
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.moveTo(player.x + 25, player.y + 25);
+                ctx.lineTo(player.x + 50, player.y);
+                ctx.stroke();
+            }
+
+            ctx.restore(); // Restore the drawing state
+        }
+
+        function gameLoop() {
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = function() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Initialize sound system
+            loadSounds();
+            
+            // Set up sound toggle button
+            const soundToggle = document.getElementById('soundToggle');
+            if (soundToggle) {
+                soundToggle.addEventListener('click', toggleSound);
+            }
+            
+            // Connect to server automatically
+            connectToServer();
+            
+            // Set up restart button with multiple event types
+            setupRestartButton();
+            
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        };
     </script>
 </body>
 </html>
