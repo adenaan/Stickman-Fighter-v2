@@ -191,6 +191,18 @@
             z-index: 30;
             text-align: center;
         }
+        #debugInfo {
+            position: fixed;
+            top: 40px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px;
+            border-radius: 5px;
+            font-size: 12px;
+            z-index: 30;
+            display: none;
+        }
         /* Add a game area container to help with positioning */
         #gameArea {
             position: absolute;
@@ -205,6 +217,7 @@
 <body>
     <div id="gameContainer">
         <div id="playerIndicator"></div>
+        <div id="debugInfo"></div>
         
         <div id="gameArea">
             <canvas id="gameCanvas"></canvas>
@@ -249,6 +262,14 @@
         const HITTING = 'hitting';
         const KICKING = 'kicking';
         const HURT = 'hurt';
+        
+        // Debug function
+        function debug(message) {
+            const debugElement = document.getElementById('debugInfo');
+            debugElement.style.display = 'block';
+            debugElement.textContent = message;
+            console.log(message);
+        }
         
         // Initialize the game
         window.onload = function() {
@@ -308,7 +329,7 @@
                         id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
                     
                     // Set up controls for this player
-                    setupPlayerControls(id);
+                    setupPlayerControls();
                 });
                 
                 socket.on('gameState', function(state) {
@@ -332,7 +353,7 @@
             }
         }
         
-        function setupPlayerControls(playerType) {
+        function setupPlayerControls() {
             const controlsContainer = document.getElementById('controlsContainer');
             
             // Clear any existing controls
@@ -341,226 +362,264 @@
             // Create new control container
             const playerControls = document.createElement('div');
             playerControls.className = 'player-controls';
-            
-            if (playerType === 'player1') {
-                // Player 1 controls (Red)
-                playerControls.innerHTML = `
-                    <button class="control-btn move-btn" id="moveLeft">←</button>
-                    <button class="control-btn move-btn" id="moveRight">→</button>
-                    <button class="control-btn hit-btn" id="hitBtn">HIT</button>
-                    <button class="control-btn kick-btn" id="kickBtn">KICK</button>
-                `;
-            } else {
-                // Player 2 controls (Blue)
-                playerControls.innerHTML = `
-                    <button class="control-btn move-btn" id="moveLeft">←</button>
-                    <button class="control-btn move-btn" id="moveRight">→</button>
-                    <button class="control-btn hit-btn" id="hitBtn">HIT</button>
-                    <button class="control-btn kick-btn" id="kickBtn">KICK</button>
-                `;
-            }
+            playerControls.innerHTML = `
+                <button class="control-btn move-btn" id="moveLeft">←</button>
+                <button class="control-btn move-btn" id="moveRight">→</button>
+                <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+                <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+            `;
             
             controlsContainer.appendChild(playerControls);
             
             // Setup touch event listeners
-            setupTouchControls(playerType);
+            setupControlEventListeners();
         }
         
-        function setupTouchControls(playerType) {
+        function setupControlEventListeners() {
             // Get all control buttons
-            const controlButtons = document.querySelectorAll('.control-btn');
+            const moveLeftBtn = document.getElementById('moveLeft');
+            const moveRightBtn = document.getElementById('moveRight');
+            const hitBtn = document.getElementById('hitBtn');
+            const kickBtn = document.getElementById('kickBtn');
             
-            // Add touch event listeners to each button
-            controlButtons.forEach(button => {
-                // Touch start - add active class and send command
-                button.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                    
-                    // Add active class for visual feedback
-                    this.classList.add('active');
-                    
-                    // Send command to server
-                    if (!socket || !playerId) return;
-                    
-                    if (this.id === 'moveLeft') {
-                        socket.emit('move', {direction: 'left'});
-                    } else if (this.id === 'moveRight') {
-                        socket.emit('move', {direction: 'right'});
-                    } else if (this.id === 'hitBtn') {
-                        socket.emit('attack', {type: 'hit'});
-                    } else if (this.id === 'kickBtn') {
-                        socket.emit('attack', {type: 'kick'});
-                    }
-                });
-                
-                // Touch end - remove active class and stop movement if needed
-                button.addEventListener('touchend', function(e) {
-                    e.preventDefault();
-                    
-                    // Remove active class
-                    this.classList.remove('active');
-                    
-                    // Stop movement if direction button
-                    if (!socket || !playerId) return;
-                    
-                    if (this.id === 'moveLeft' || this.id === 'moveRight') {
-                        socket.emit('stopMove');
-                    }
-                });
-                
-                // For mouse users (testing)
-                button.addEventListener('mousedown', function(e) {
-                    // Add active class for visual feedback
-                    this.classList.add('active');
-                    
-                    // Send command to server
-                    if (!socket || !playerId) return;
-                    
-                    if (this.id === 'moveLeft') {
-                        socket.emit('move', {direction: 'left'});
-                    } else if (this.id === 'moveRight') {
-                        socket.emit('move', {direction: 'right'});
-                    } else if (this.id === 'hitBtn') {
-                        socket.emit('attack', {type: 'hit'});
-                    } else if (this.id === 'kickBtn') {
-                        socket.emit('attack', {type: 'kick'});
-                    }
-                });
-                
-                button.addEventListener('mouseup', function(e) {
-                    // Remove active class
-                    this.classList.remove('active');
-                    
-                    // Stop movement if direction button
-                    if (!socket || !playerId) return;
-                    
-                    if (this.id === 'moveLeft' || this.id === 'moveRight') {
-                        socket.emit('stopMove');
-                    }
-                });
-                
-                // Handle case where mouse leaves button while pressed
-                button.addEventListener('mouseleave', function(e) {
-                    if (this.classList.contains('active')) {
-                        this.classList.remove('active');
-                        
-                        if (!socket || !playerId) return;
-                        
-                        if (this.id === 'moveLeft' || this.id === 'moveRight') {
-                            socket.emit('stopMove');
-                        }
-                    }
-                });
+            // Clear any existing event listeners (just in case)
+            moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
+            moveRightBtn.replaceWith(moveRightBtn.cloneNode(true));
+            hitBtn.replaceWith(hitBtn.cloneNode(true));
+            kickBtn.replaceWith(kickBtn.cloneNode(true));
+            
+            // Get the fresh elements
+            const newMoveLeftBtn = document.getElementById('moveLeft');
+            const newMoveRightBtn = document.getElementById('moveRight');
+            const newHitBtn = document.getElementById('hitBtn');
+            const newKickBtn = document.getElementById('kickBtn');
+            
+            // Add touch start event listeners
+            newMoveLeftBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.classList.add('active');
+                if (socket) socket.emit('move', {direction: 'left'});
+                debug("Moving left: " + playerId);
             });
             
-            // Add keyboard controls for desktop testing
-            setupKeyboardControls(playerType);
+            newMoveRightBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.classList.add('active');
+                if (socket) socket.emit('move', {direction: 'right'});
+                debug("Moving right: " + playerId);
+            });
+            
+            newHitBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.classList.add('active');
+                if (socket) socket.emit('attack', {type: 'hit'});
+                debug("Hitting: " + playerId);
+            });
+            
+            newKickBtn.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.classList.add('active');
+                if (socket) socket.emit('attack', {type: 'kick'});
+                debug("Kicking: " + playerId);
+            });
+            
+            // Add touch end event listeners
+            newMoveLeftBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.classList.remove('active');
+                if (socket) socket.emit('stopMove');
+            });
+            
+            newMoveRightBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.classList.remove('active');
+                if (socket) socket.emit('stopMove');
+            });
+            
+            newHitBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.classList.remove('active');
+            });
+            
+            newKickBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.classList.remove('active');
+            });
+            
+            // For mouse users (testing)
+            newMoveLeftBtn.addEventListener('mousedown', function(e) {
+                this.classList.add('active');
+                if (socket) socket.emit('move', {direction: 'left'});
+                debug("Mouse moving left: " + playerId);
+            });
+            
+            newMoveRightBtn.addEventListener('mousedown', function(e) {
+                this.classList.add('active');
+                if (socket) socket.emit('move', {direction: 'right'});
+                debug("Mouse moving right: " + playerId);
+            });
+            
+            newHitBtn.addEventListener('mousedown', function(e) {
+                this.classList.add('active');
+                if (socket) socket.emit('attack', {type: 'hit'});
+                debug("Mouse hitting: " + playerId);
+            });
+            
+            newKickBtn.addEventListener('mousedown', function(e) {
+                this.classList.add('active');
+                if (socket) socket.emit('attack', {type: 'kick'});
+                debug("Mouse kicking: " + playerId);
+            });
+            
+            newMoveLeftBtn.addEventListener('mouseup', function(e) {
+                this.classList.remove('active');
+                if (socket) socket.emit('stopMove');
+            });
+            
+            newMoveRightBtn.addEventListener('mouseup', function(e) {
+                this.classList.remove('active');
+                if (socket) socket.emit('stopMove');
+            });
+            
+            newHitBtn.addEventListener('mouseup', function(e) {
+                this.classList.remove('active');
+            });
+            
+            newKickBtn.addEventListener('mouseup', function(e) {
+                this.classList.remove('active');
+            });
+            
+            // Setup keyboard controls
+            setupKeyboardControls();
         }
         
-        function setupKeyboardControls(playerType) {
-            window.addEventListener('keydown', function(e) {
-                if (!socket || !playerId) return;
-                
-                // Find the corresponding button and add active class
-                let buttonId = null;
-                
-                if (playerType === 'player1') {
-                    if (e.key === 'a') {
-                        buttonId = 'moveLeft';
-                        socket.emit('move', {direction: 'left'});
-                    }
-                    if (e.key === 'd') {
-                        buttonId = 'moveRight';
-                        socket.emit('move', {direction: 'right'});
-                    }
-                    if (e.key === 'q') {
-                        buttonId = 'hitBtn';
-                        socket.emit('attack', {type: 'hit'});
-                    }
-                    if (e.key === 'e') {
-                        buttonId = 'kickBtn';
-                        socket.emit('attack', {type: 'kick'});
-                    }
-                } else if (playerType === 'player2') {
-                    if (e.key === 'ArrowLeft') {
-                        buttonId = 'moveLeft';
-                        socket.emit('move', {direction: 'left'});
-                    }
-                    if (e.key === 'ArrowRight') {
-                        buttonId = 'moveRight';
-                        socket.emit('move', {direction: 'right'});
-                    }
-                    if (e.key === ',') {
-                        buttonId = 'hitBtn';
-                        socket.emit('attack', {type: 'hit'});
-                    }
-                    if (e.key === '.') {
-                        buttonId = 'kickBtn';
-                        socket.emit('attack', {type: 'kick'});
-                    }
-                }
-                
-                // Add active class to the corresponding button
-                if (buttonId) {
-                    const button = document.getElementById(buttonId);
-                    if (button && !button.classList.contains('active')) {
-                        button.classList.add('active');
-                    }
-                }
-            });
+        function setupKeyboardControls() {
+            // Remove any existing event listeners
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
             
-            window.addEventListener('keyup', function(e) {
-                if (!socket || !playerId) return;
-                
-                // Find the corresponding button and remove active class
-                let buttonId = null;
-                let shouldStopMove = false;
-                
-                if (playerType === 'player1') {
-                    if (e.key === 'a') {
-                        buttonId = 'moveLeft';
-                        shouldStopMove = true;
-                    }
-                    if (e.key === 'd') {
-                        buttonId = 'moveRight';
-                        shouldStopMove = true;
-                    }
-                    if (e.key === 'q') {
-                        buttonId = 'hitBtn';
-                    }
-                    if (e.key === 'e') {
-                        buttonId = 'kickBtn';
-                    }
-                } else if (playerType === 'player2') {
-                    if (e.key === 'ArrowLeft') {
-                        buttonId = 'moveLeft';
-                        shouldStopMove = true;
-                    }
-                    if (e.key === 'ArrowRight') {
-                        buttonId = 'moveRight';
-                        shouldStopMove = true;
-                    }
-                    if (e.key === ',') {
-                        buttonId = 'hitBtn';
-                    }
-                    if (e.key === '.') {
-                        buttonId = 'kickBtn';
-                    }
+            // Add event listeners
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+        }
+        
+        function handleKeyDown(e) {
+            if (!socket || !playerId) return;
+            
+            let buttonId = null;
+            let command = null;
+            
+            // Player 1 controls
+            if (playerId === 'player1') {
+                if (e.key === 'a') {
+                    buttonId = 'moveLeft';
+                    command = {type: 'move', data: {direction: 'left'}};
+                }
+                else if (e.key === 'd') {
+                    buttonId = 'moveRight';
+                    command = {type: 'move', data: {direction: 'right'}};
+                }
+                else if (e.key === 'q') {
+                    buttonId = 'hitBtn';
+                    command = {type: 'attack', data: {type: 'hit'}};
+                }
+                else if (e.key === 'e') {
+                    buttonId = 'kickBtn';
+                    command = {type: 'attack', data: {type: 'kick'}};
+                }
+            }
+            // Player 2 controls
+            else if (playerId === 'player2') {
+                if (e.key === 'ArrowLeft') {
+                    buttonId = 'moveLeft';
+                    command = {type: 'move', data: {direction: 'left'}};
+                }
+                else if (e.key === 'ArrowRight') {
+                    buttonId = 'moveRight';
+                    command = {type: 'move', data: {direction: 'right'}};
+                }
+                else if (e.key === ',') {
+                    buttonId = 'hitBtn';
+                    command = {type: 'attack', data: {type: 'hit'}};
+                }
+                else if (e.key === '.') {
+                    buttonId = 'kickBtn';
+                    command = {type: 'attack', data: {type: 'kick'}};
+                }
+            }
+            
+            // Add active class to the button
+            if (buttonId) {
+                const button = document.getElementById(buttonId);
+                if (button && !button.classList.contains('active')) {
+                    button.classList.add('active');
                 }
                 
-                // Remove active class from the corresponding button
-                if (buttonId) {
-                    const button = document.getElementById(buttonId);
-                    if (button) {
-                        button.classList.remove('active');
+                // Send command to server
+                if (command) {
+                    if (command.type === 'move') {
+                        socket.emit('move', command.data);
+                    } else if (command.type === 'attack') {
+                        socket.emit('attack', command.data);
                     }
+                    debug("Key " + e.key + ": " + command.type + " " + JSON.stringify(command.data));
+                }
+            }
+        }
+        
+        function handleKeyUp(e) {
+            if (!socket || !playerId) return;
+            
+            let buttonId = null;
+            let shouldStopMove = false;
+            
+            // Player 1 controls
+            if (playerId === 'player1') {
+                if (e.key === 'a') {
+                    buttonId = 'moveLeft';
+                    shouldStopMove = true;
+                }
+                else if (e.key === 'd') {
+                    buttonId = 'moveRight';
+                    shouldStopMove = true;
+                }
+                else if (e.key === 'q') {
+                    buttonId = 'hitBtn';
+                }
+                else if (e.key === 'e') {
+                    buttonId = 'kickBtn';
+                }
+            }
+            // Player 2 controls
+            else if (playerId === 'player2') {
+                if (e.key === 'ArrowLeft') {
+                    buttonId = 'moveLeft';
+                    shouldStopMove = true;
+                }
+                else if (e.key === 'ArrowRight') {
+                    buttonId = 'moveRight';
+                    shouldStopMove = true;
+                }
+                else if (e.key === ',') {
+                    buttonId = 'hitBtn';
+                }
+                else if (e.key === '.') {
+                    buttonId = 'kickBtn';
+                }
+            }
+            
+            // Remove active class from the button
+            if (buttonId) {
+                const button = document.getElementById(buttonId);
+                if (button) {
+                    button.classList.remove('active');
                 }
                 
                 // Stop movement if needed
                 if (shouldStopMove) {
                     socket.emit('stopMove');
                 }
-            });
+            }
         }
         
         function setupRestartButton() {
