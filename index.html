@@ -130,6 +130,25 @@
             justify-content: center;
             align-items: center;
         }
+
+    /* Sound control styles */
+    #soundControl {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(0, 0, 0, 0.5);
+        color: white;
+        padding: 5px;
+        border-radius: 5px;
+        z-index: 30;
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
     </style>
 </head>
 <body>
@@ -141,6 +160,7 @@
         <button id="restartBtn">Play Again</button>
         <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
         <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
+        <div id="soundControl">🔊</div>
     </div>
     <div id="debugConsole"></div>
 
@@ -155,6 +175,10 @@
         let gameStarted = false;
         let readyPlayers = [];
         const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
+    // Sound variables
+    let soundEnabled = true;
+    let sounds = {};
+    let soundsLoaded = false;
 
         // Sound system
         let sounds = {};
@@ -166,10 +190,10 @@
         const SOUND_PATHS = {
             hit: '/assets/hit.mp3',
             kick: '/assets/kick.mp3',
-            hurt: '/assets/hurt.mp3',
-            victory: '/assets/victory.mp3',
-            gameStart: '/assets/game-start.mp3',
-            button: '/assets/button-click.mp3'
+            hurt: '/sounds/hurt.mp3',
+            victory: '/sounds/victory.mp3',
+            gameStart: '/sounds/game-start.mp3',
+            button: '/sounds/button-click.mp3'
         };
 
         let prevGameStarted = false;
@@ -419,6 +443,7 @@
             const winnerMessage = document.getElementById('winnerMessage');
             winnerMessage.textContent = winner === playerId ? 'You Win!' : 'You Lose!';
             winnerMessage.style.display = 'block';
+            playSound('victory');
         }
 
         function resizeCanvas() {
@@ -426,6 +451,81 @@
             canvas.height = canvasHeight;
             draw(); // Redraw the scene after resizing
         }
+
+    // Load all game sounds
+    function loadSounds() {
+        const soundFiles = {
+            hit: '/sounds/hit.mp3',
+            kick: '/sounds/kick.mp3',
+            hurt: '/sounds/hurt.mp3',
+            victory: '/sounds/victory.mp3',
+            gameStart: '/sounds/game-start.mp3',
+            button: '/sounds/button-click.mp3'
+        };
+        
+        let loadedCount = 0;
+        const totalSounds = Object.keys(soundFiles).length;
+        
+        // Create audio objects for each sound
+        for (const [name, url] of Object.entries(soundFiles)) {
+            sounds[name] = new Audio();
+            sounds[name].src = url;
+            
+            // Handle loading
+            sounds[name].addEventListener('canplaythrough', () => {
+                loadedCount++;
+                if (loadedCount === totalSounds) {
+                    soundsLoaded = true;
+                    console.log('All sounds loaded');
+                }
+            });
+            
+            // Handle errors
+            sounds[name].addEventListener('error', (e) => {
+                console.error(`Error loading sound ${name}:`, e);
+            });
+            
+            // Preload the sound
+            sounds[name].load();
+        }
+    }
+    
+    // Play a sound with error handling
+    function playSound(name) {
+        if (!soundEnabled || !soundsLoaded) return;
+        
+        try {
+            // Create a clone to allow overlapping sounds
+            const sound = sounds[name].cloneNode();
+            sound.volume = 0.5; // Set volume to 50%
+            
+            // Play the sound with a promise and catch any errors
+            const playPromise = sound.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    console.warn(`Sound play error (${name}):`, error);
+                });
+            }
+        } catch (error) {
+            console.error(`Error playing sound ${name}:`, error);
+        }
+    }
+    
+    // Set up sound control button
+    function setupSoundControl() {
+        const soundControl = document.getElementById('soundControl');
+        
+        soundControl.addEventListener('click', function() {
+            soundEnabled = !soundEnabled;
+            this.textContent = soundEnabled ? '🔊' : '🔇';
+            
+            // Play a sound to confirm it's working
+            if (soundEnabled) {
+                playSound('button');
+            }
+        });
+    }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -485,6 +585,12 @@
             
             // Set canvas size
             resizeCanvas();
+            
+    // Load sounds
+    loadSounds();
+    
+    // Set up sound control
+    setupSoundControl();
             window.addEventListener('resize', resizeCanvas);
             
             // Initialize sound system
