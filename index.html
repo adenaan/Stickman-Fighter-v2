@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Stickman Fighter</title>
+    <!-- Load Socket.io from CDN instead of the server -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            touch-action: none;
+            background-color: #222;
+            font-family: Arial, sans-serif;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #gameCanvas {
+            background-color: #333;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 10;
+        }
+        .player-controls {
+            display: flex;
+            gap: 10px;
+        }
+        .control-btn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .hit-btn {
+            background-color: rgba(255, 50, 50, 0.6);
+        }
+        .kick-btn {
+            background-color: rgba(50, 50, 255, 0.6);
+        }
+        .move-btn {
+            background-color: rgba(50, 200, 50, 0.6);
+        }
+        #winnerMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 24px;
+            display: none;
+            text-align: center;
+            z-index: 20;
+        }
+        #restartBtn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        #waitingMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 24px;
+            text-align: center;
+            z-index: 20;
+        }
+        #serverUrlContainer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 30;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+        }
+        #glitchServerUrl {
+            width: 250px;
+            padding: 5px;
+            margin-right: 5px;
+        }
+        #connectBtn {
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="serverUrlContainer">
+            <input type="text" id="glitchServerUrl" placeholder="Enter Glitch server URL (e.g., https://your-app.glitch.me)" />
+            <button id="connectBtn">Connect</button>
+        </div>
+        
+        <canvas id="gameCanvas"></canvas>
+        
+        <div class="controls">
+            <div class="player-controls" id="player1Controls">
+                <button class="control-btn move-btn" id="p1Left">←</button>
+                <button class="control-btn move-btn" id="p1Right">→</button>
+                <button class="control-btn hit-btn" id="p1Hit">HIT</button>
+                <button class="control-btn kick-btn" id="p1Kick">KICK</button>
+            </div>
+            
+            <div class="player-controls" id="player2Controls">
+                <button class="control-btn hit-btn" id="p2Hit">HIT</button>
+                <button class="control-btn kick-btn" id="p2Kick">KICK</button>
+                <button class="control-btn move-btn" id="p2Left">←</button>
+                <button class="control-btn move-btn" id="p2Right">→</button>
+            </div>
+        </div>
+        
+        <div id="winnerMessage">
+            <div id="winnerText"></div>
+            <button id="restartBtn">Play Again</button>
+        </div>
+        
+        <div id="waitingMessage">
+            Enter Glitch server URL and click Connect to start
+        </div>
+    </div>
+
+    <script>
+        // Game variables
+        let canvas, ctx;
+        let gameWidth, gameHeight;
+        let socket;
+        let playerId;
+        let players = {};
+        let gameStarted = false;
+        
+        // Game constants
+        const PLAYER_WIDTH = 30;
+        const PLAYER_HEIGHT = 80;
+        const PLAYER_SPEED = 5;
+        const MAX_POWER = 100;
+        const HIT_DAMAGE = 10;
+        const KICK_DAMAGE = 15;
+        const HIT_RANGE = 40;
+        const KICK_RANGE = 50;
+        
+        // Animation states
+        const IDLE = 'idle';
+        const HITTING = 'hitting';
+        const KICKING = 'kicking';
+        const HURT = 'hurt';
+        
+        // Initialize the game
+        window.onload = function() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Set up connect button
+            document.getElementById('connectBtn').addEventListener('click', connectToServer);
+            
+            // Set up controls
+            setupControls();
+            
+            // Try to load saved server URL
+            const savedUrl = localStorage.getItem('glitchServerUrl');
+            if (savedUrl) {
+                document.getElementById('glitchServerUrl').value = savedUrl;
+            }
+            
+            // Start game loop
+            requestAnimationFrame(gameLoop);
+        };
+        
+        function resizeCanvas() {
+            gameWidth = window.innerWidth;
+            gameHeight = window.innerHeight;
+            canvas.width = gameWidth;
+            canvas.height = gameHeight;
+        }
+        
+        function connectToServer() {
+            const serverUrl = document.getElementById('glitchServerUrl').value.trim();
+            
+            if (!serverUrl) {
+                alert('Please enter the Glitch server URL');
+                return;
+            }
+            
+            // Save server URL for next time
+            localStorage.setItem('glitchServerUrl', serverUrl);
+            
+            // Disconnect existing socket if any
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            // Update waiting message
+            document.getElementById('waitingMessage').textContent = 'Connecting to server...';
+            document.getElementById('waitingMessage').style.display = 'block';
+            
+            try {
+                // Connect to the Glitch server
+                socket = io(serverUrl, {
+                    transports: ['websocket', 'polling'],
+                    reconnectionAttempts: 5
+                });
+                
+                socket.on('connect', function() {
+                    console.log('Connected to server');
+                    document.getElementById('waitingMessage').textContent = 'Waiting for another player to join...';
+                });
+                
+                socket.on('connect_error', function(error) {
+                    console.error('Connection error:', error);
+                    document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Check URL and try again.';
+                });
+                
+                socket.on('playerId', function(id) {
+                    playerId = id;
+                    console.log('Your player ID:', playerId);
+                });
+                
+                socket.on('gameState', function(state) {
+                    players = state.players;
+                    gameStarted = state.gameStarted;
+                    
+                    // Show/hide waiting message
+                    document.getElementById('waitingMessage').style.display = 
+                        gameStarted ? 'none' : 'block';
+                    
+                    // Check for winner
+                    if (state.winner) {
+                        showWinner(state.winner);
+                    }
+                });
+            } catch (error) {
+                console.error('Error connecting to server:', error);
+                document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Check URL and try again.';
+            }
+        }
+        
+        function setupControls() {
+            // Player 1 controls
+            document.getElementById('p1Left').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player1' && socket) socket.emit('move', {direction: 'left'});
+            });
+            
+            document.getElementById('p1Right').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player1' && socket) socket.emit('move', {direction: 'right'});
+            });
+            
+            document.getElementById('p1Hit').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player1' && socket) socket.emit('attack', {type: 'hit'});
+            });
+            
+            document.getElementById('p1Kick').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player1' && socket) socket.emit('attack', {type: 'kick'});
+            });
+            
+            // Player 2 controls
+            document.getElementById('p2Left').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player2' && socket) socket.emit('move', {direction: 'left'});
+            });
+            
+            document.getElementById('p2Right').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player2' && socket) socket.emit('move', {direction: 'right'});
+            });
+            
+            document.getElementById('p2Hit').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player2' && socket) socket.emit('attack', {type: 'hit'});
+            });
+            
+            document.getElementById('p2Kick').addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                if (playerId === 'player2' && socket) socket.emit('attack', {type: 'kick'});
+            });
+            
+            // Stop movement on touch end
+            const controlButtons = document.querySelectorAll('.control-btn');
+            controlButtons.forEach(button => {
+                button.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    if (socket && ((playerId === 'player1' && button.id.startsWith('p1')) ||
+                        (playerId === 'player2' && button.id.startsWith('p2')))) {
+                        if (button.id.includes('Left') || button.id.includes('Right')) {
+                            socket.emit('stopMove');
+                        }
+                    }
+                });
+            });
+            
+            // Restart button
+            document.getElementById('restartBtn').addEventListener('click', function() {
+                if (socket) socket.emit('restart');
+                document.getElementById('winnerMessage').style.display = 'none';
+            });
+            
+            // Add keyboard controls for testing on desktop
+            window.addEventListener('keydown', function(e) {
+                if (!playerId || !socket) return;
+                
+                if (playerId === 'player1') {
+                    if (e.key === 'a') socket.emit('move', {direction: 'left'});
+                    if (e.key === 'd') socket.emit('move', {direction: 'right'});
+                    if (e.key === 'q') socket.emit('attack', {type: 'hit'});
+                    if (e.key === 'e') socket.emit('attack', {type: 'kick'});
+                } else if (playerId === 'player2') {
+                    if (e.key === 'ArrowLeft') socket.emit('move', {direction: 'left'});
+                    if (e.key === 'ArrowRight') socket.emit('move', {direction: 'right'});
+                    if (e.key === ',') socket.emit('attack', {type: 'hit'});
+                    if (e.key === '.') socket.emit('attack', {type: 'kick'});
+                }
+            });
+            
+            window.addEventListener('keyup', function(e) {
+                if (!playerId || !socket) return;
+                
+                if (playerId === 'player1') {
+                    if (e.key === 'a' || e.key === 'd') socket.emit('stopMove');
+                } else if (playerId === 'player2') {
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') socket.emit('stopMove');
+                }
+            });
+        }
+        
+        function gameLoop() {
+            // Clear canvas
+            ctx.clearRect(0, 0, gameWidth, gameHeight);
+            
+            if (gameStarted) {
+                // Draw game elements
+                drawBackground();
+                drawPlayers();
+                drawPowerBars();
+            }
+            
+            // Continue the game loop
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function drawBackground() {
+            // Draw floor
+            ctx.fillStyle = '#555';
+            ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
+            
+            // Draw background elements
+            ctx.fillStyle = '#444';
+            for (let i = 0; i < 5; i++) {
+                ctx.fillRect(gameWidth * i / 5, gameHeight - 150, 10, 100);
+            }
+        }
+        
+        function drawPlayers() {
+            if (!players.player1 || !players.player2) return;
+            
+            // Draw player 1
+            drawStickman(
+                players.player1.x, 
+                gameHeight - 50 - PLAYER_HEIGHT, 
+                '#FF5555', 
+                players.player1.state, 
+                false
+            );
+            
+            // Draw player 2
+            drawStickman(
+                players.player2.x, 
+                gameHeight - 50 - PLAYER_HEIGHT, 
+                '#5555FF', 
+                players.player2.state, 
+                true
+            );
+        }
+        
+        function drawStickman(x, y, color, state, facingLeft) {
+            ctx.save();
+            
+            // Flip if facing left
+            if (facingLeft) {
+                ctx.translate(x + PLAYER_WIDTH / 2, 0);
+                ctx.scale(-1, 1);
+                ctx.translate(-x - PLAYER_WIDTH / 2, 0);
+            }
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            // Head
+            ctx.beginPath();
+            ctx.arc(x + PLAYER_WIDTH / 2, y + 10, 10, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Body
+            ctx.beginPath();
+            ctx.moveTo(x + PLAYER_WIDTH / 2, y + 20);
+            ctx.lineTo(x + PLAYER_WIDTH / 2, y + 50);
+            ctx.stroke();
+            
+            // Arms
+            if (state === HITTING) {
+                // Hitting pose
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20);
+                ctx.lineTo(x + PLAYER_WIDTH + 15, y + 25);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + 5, y + 40);
+                ctx.stroke();
+            } else if (state === KICKING) {
+                // Kicking pose
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + 5, y + 25);
+                ctx.stroke();
+            } else {
+                // Normal pose
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
+                ctx.lineTo(x + 5, y + 25);
+                ctx.stroke();
+            }
+            
+            // Legs
+            if (state === KICKING) {
+                // Kicking pose
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
+                ctx.lineTo(x + 10, y + 70);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
+                ctx.lineTo(x + PLAYER_WIDTH + 20, y + 60);
+                ctx.stroke();
+            } else {
+                // Normal pose
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
+                ctx.lineTo(x + 10, y + 70);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
+                ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70);
+                ctx.stroke();
+            }
+            
+            // If hurt, draw stars around head
+            if (state === HURT) {
+                ctx.strokeStyle = 'yellow';
+                for (let i = 0; i < 3; i++) {
+                    const angle = Math.PI * 2 * i / 3;
+                    const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * 20;
+                    const starY = y + 10 + Math.sin(angle) * 20;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(starX - 5, starY);
+                    ctx.lineTo(starX + 5, starY);
+                    ctx.stroke();
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(starX, starY - 5);
+                    ctx.lineTo(starX, starY + 5);
+                    ctx.stroke();
+                }
+            }
+            
+            ctx.restore();
+        }
+        
+        function drawPowerBars() {
+            if (!players.player1 || !players.player2) return;
+            
+            const barWidth = 200;
+            const barHeight = 20;
+            const margin = 20;
+            
+            // Player 1 power bar
+            ctx.fillStyle = '#333';
+            ctx.fillRect(margin, margin, barWidth, barHeight);
+            
+            ctx.fillStyle = '#FF5555';
+            const p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
+            ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
+            
+            ctx.strokeStyle = '#FFF';
+            ctx.strokeRect(margin, margin, barWidth, barHeight);
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '14px Arial';
+            ctx.fillText('Player 1', margin, margin + barHeight + 15);
+            
+            // Player 2 power bar
+            ctx.fillStyle = '#333';
+            ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+            
+            ctx.fillStyle = '#5555FF';
+            const p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
+            ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
+            
+            ctx.strokeStyle = '#FFF';
+            ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+            
+            ctx.fillStyle = '#FFF';
+            ctx.font = '14px Arial';
+            ctx.fillText('Player 2', gameWidth - margin - barWidth, margin + barHeight + 15);
+        }
+        
+        function showWinner(winner) {
+            const winnerMessage = document.getElementById('winnerMessage');
+            const winnerText = document.getElementById('winnerText');
+            
+            winnerText.textContent = `${winner} wins!`;
+            winnerMessage.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
