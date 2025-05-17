@@ -1,702 +1,3081 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stickman Fighter - Glitch Connected</title>
-    <!-- Include Socket.io client library -->
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background-color: #000;
-            font-family: Arial, sans-serif;
-        }
-        #gameCanvas {
-            display: block;
-            margin: 0 auto;
-            background-color: #333;
-        }
-        #controls {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            color: white;
-            z-index: 100;
-        }
-        .control-group {
-            margin-bottom: 10px;
-        }
-        button {
-            margin: 2px;
-            padding: 5px 10px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        #statusMessage {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 24px;
-            text-align: center;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            z-index: 50;
-        }
-        #playerIndicator {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: white;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 100;
-        }
-        #gameControls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 20px;
-            z-index: 100;
-        }
-        .game-btn {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background-color: rgba(255, 255, 255, 0.3);
-            color: white;
-            font-size: 18px;
-            border: none;
-            cursor: pointer;
-        }
-        .hit-btn {
-            background-color: rgba(255, 50, 50, 0.7);
-        }
-        .kick-btn {
-            background-color: rgba(50, 50, 255, 0.7);
-        }
-        .move-btn {
-            background-color: rgba(50, 200, 50, 0.7);
-        }
-        #winnerMessage {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            font-size: 24px;
-            display: none;
-            text-align: center;
-            z-index: 200;
-            width: 80%;
-            max-width: 300px;
-        }
-        #restartBtn {
-            margin-top: 20px;
-            padding: 15px 30px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 18px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stickman Fighter</title>
+  <!-- Load Socket.io from CDN -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+      body {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          touch-action: none;
+          background-color: #222;
+          font-family: Arial, sans-serif;
+      }
+      #gameContainer {
+          position: relative;
+          width: 100vw;
+          height: 100vh;
+          overflow: hidden;
+      }
+      #gameCanvas {
+          background-color: #333;
+          position: absolute;
+          top: 0;
+          left: 0;
+      }
+      .controls {
+          position: fixed;
+          bottom: 30px; /* Increased from 20px to move controls lower */
+          width: 100%;
+          padding: 0 10px;
+          box-sizing: border-box;
+          z-index: 10;
+          display: flex;
+          justify-content: center;
+      }
+      .player-controls {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 15px; /* Extra margin at the bottom */
+      }
+      .control-btn {
+          width: 65px;
+          height: 65px;
+          border-radius: 50%;
+          border: none;
+          background-color: rgba(255, 255, 255, 0.3);
+          color: white;
+          font-weight: bold;
+          font-size: 18px;
+          touch-action: manipulation;
+          user-select: none;
+          -webkit-user-select: none;
+          /* Add transition for smooth feedback */
+          transition: all 0.1s ease;
+          position: relative;
+          box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+      }
+      /* Button press effect */
+      .control-btn.active {
+          transform: scale(0.95) translateY(4px);
+          box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+      }
+      @media (max-width: 480px) {
+          .control-btn {
+              width: 55px;
+              height: 55px;
+              font-size: 16px;
+          }
+          .player-controls {
+              gap: 10px;
+          }
+      }
+      @media (max-width: 360px) {
+          .control-btn {
+              width: 45px;
+              height: 45px;
+              font-size: 14px;
+          }
+          .player-controls {
+              gap: 8px;
+          }
+      }
+      .hit-btn {
+          background-color: rgba(255, 50, 50, 0.7);
+      }
+      .hit-btn.active {
+          background-color: rgba(255, 50, 50, 0.9);
+      }
+      .kick-btn {
+          background-color: rgba(50, 50, 255, 0.7);
+      }
+      .kick-btn.active {
+          background-color: rgba(50, 50, 255, 0.9);
+      }
+      .move-btn {
+          background-color: rgba(50, 200, 50, 0.7);
+      }
+      .move-btn.active {
+          background-color: rgba(50, 200, 50, 0.9);
+      }
+      /* Button ripple effect */
+      .control-btn::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 5px;
+          height: 5px;
+          background: rgba(255, 255, 255, 0.5);
+          opacity: 0;
+          border-radius: 100%;
+          transform: scale(1, 1) translate(-50%, -50%);
+          transform-origin: 50% 50%;
+      }
+      .control-btn.active::after {
+          animation: ripple 0.4s ease-out;
+      }
+      @keyframes ripple {
+          0% {
+              transform: scale(0, 0) translate(-50%, -50%);
+              opacity: 0.5;
+          }
+          100% {
+              transform: scale(20, 20) translate(-50%, -50%);
+              opacity: 0;
+          }
+      }
+      #winnerMessage {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background-color: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 30px;
+          border-radius: 10px;
+          font-size: 24px;
+          display: none;
+          text-align: center;
+          z-index: 20;
+          width: 80%;
+          max-width: 300px;
+      }
+      #restartBtn {
+          margin-top: 20px;
+          padding: 15px 30px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 18px;
+          touch-action: manipulation;
+          transition: all 0.1s ease;
+          box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+      }
+      #restartBtn:active {
+          transform: scale(0.95) translateY(4px);
+          box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+          background-color: #3e8e41;
+      }
+      #restartBtn:disabled {
+          background-color: #888;
+          cursor: default;
+          transform: none;
+          box-shadow: none;
+      }
+      #waitingMessage {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background-color: rgba(0, 0, 0, 0.7);
+          color: white;
+          padding: 20px;
+          border-radius: 10px;
+          font-size: 20px;
+          text-align: center;
+          z-index: 20;
+          width: 80%;
+          max-width: 300px;
+      }
+      #playerIndicator {
+          position: fixed;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px 10px;
+          border-radius: 5px;
+          font-size: 16px;
+          z-index: 30;
+          text-align: center;
+      }
+      #debugInfo {
+          position: fixed;
+          top: 40px;
+          left: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          font-size: 12px;
+          z-index: 30;
+          display: none;
+      }
+      /* Add a game area container to help with positioning */
+      #gameArea {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: calc(100% - 130px); /* Reserve space for controls */
+          overflow: hidden;
+      }
+      /* Player ready status styles */
+      .player-status {
+          margin-top: 10px;
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+      }
+      .status-indicator {
+          padding: 5px 10px;
+          border-radius: 5px;
+          font-size: 14px;
+          font-weight: bold;
+      }
+      .status-waiting {
+          color: #ff5555;
+      }
+      .status-ready {
+          color: #55ff55;
+      }
+      /* Sound control styles */
+      #soundControl {
+          position: fixed;
+          top: 10px;
+          right: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          z-index: 30;
+          cursor: pointer;
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+      }
+      /* Weather and background controls */
+      #visualControls {
+          position: fixed;
+          top: 10px;
+          left: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          z-index: 30;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          font-size: 12px;
+      }
+      .visual-control-btn {
+          padding: 3px 6px;
+          background-color: rgba(255, 255, 255, 0.2);
+          border: none;
+          border-radius: 3px;
+          color: white;
+          cursor: pointer;
+          transition: all 0.1s ease;
+      }
+      .visual-control-btn:hover {
+          background-color: rgba(255, 255, 255, 0.3);
+      }
+      .visual-control-btn.active {
+          background-color: rgba(100, 200, 100, 0.5);
+      }
+      .visual-control-group {
+          margin-bottom: 5px;
+      }
+      .visual-control-label {
+          margin-bottom: 3px;
+          font-weight: bold;
+      }
+  </style>
 </head>
 <body>
-    <div id="controls">
-        <div class="control-group">
-            <div>Background:</div>
-            <button id="bgForest">Forest</button>
-            <button id="bgMountain">Mountain</button>
-            <button id="bgCity">City</button>
-        </div>
-        <div class="control-group">
-            <div>Weather:</div>
-            <button id="weatherClear">Clear</button>
-            <button id="weatherRain">Rain</button>
-            <button id="weatherSnow">Snow</button>
-            <button id="weatherStorm">Storm</button>
-        </div>
-        <div class="control-group">
-            <div>Time of Day:</div>
-            <button id="timeDay">Day</button>
-            <button id="timeSunset">Sunset</button>
-            <button id="timeNight">Night</button>
-        </div>
-    </div>
-    
-    <div id="playerIndicator"></div>
-    
-    <canvas id="gameCanvas"></canvas>
-    
-    <div id="statusMessage">Connecting to server...</div>
-    
-    <div id="gameControls" style="display: none;">
-        <button class="game-btn move-btn" id="moveLeft">←</button>
-        <button class="game-btn move-btn" id="moveRight">→</button>
-        <button class="game-btn hit-btn" id="hitBtn">HIT</button>
-        <button class="game-btn kick-btn" id="kickBtn">KICK</button>
-    </div>
-    
-    <div id="winnerMessage">
-        <div id="winnerText"></div>
-        <button id="restartBtn">Play Again</button>
-    </div>
+  <div id="gameContainer">
+      <div id="playerIndicator"></div>
+      <div id="debugInfo"></div>
+      <div id="soundControl">🔊</div>
+      
+      <div id="visualControls">
+          <div class="visual-control-group">
+              <div class="visual-control-label">Background</div>
+              <button class="visual-control-btn" data-bg="dojo">Dojo</button>
+              <button class="visual-control-btn" data-bg="mountain">Mountain</button>
+              <button class="visual-control-btn" data-bg="city">City</button>
+              <button class="visual-control-btn" data-bg="beach">Beach</button>
+              <button class="visual-control-btn" data-bg="forest">Forest</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Weather</div>
+              <button class="visual-control-btn" data-weather="none">Clear</button>
+              <button class="visual-control-btn" data-weather="rain">Rain</button>
+              <button class="visual-control-btn" data-weather="snow">Snow</button>
+              <button class="visual-control-btn" data-weather="storm">Storm</button>
+              <button class="visual-control-btn" data-weather="fog">Fog</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Time</div>
+              <button class="visual-control-btn" data-time="day">Day</button>
+              <button class="visual-control-btn" data-time="sunset">Sunset</button>
+              <button class="visual-control-btn" data-time="night">Night</button>
+              <button class="visual-control-btn" data-time="dawn">Dawn</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Auto Cycle</div>
+              <button class="visual-control-btn" id="toggleBgCycle">BG: Off</button>
+              <button class="visual-control-btn" id="toggleWeatherCycle">Weather: Off</button>
+          </div>
+      </div>
+      
+      <div id="gameArea">
+          <canvas id="gameCanvas"></canvas>
+      </div>
+      
+      <div class="controls" id="controlsContainer">
+          <!-- Control buttons will be added here dynamically -->
+      </div>
+      
+      <div id="winnerMessage">
+          <div id="winnerText"></div>
+          <div class="player-status">
+              <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
+              <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
+          </div>
+          <button id="restartBtn">Play Again</button>
+      </div>
+      
+      <div id="waitingMessage">
+          Connecting to server...
+      </div>
+  </div>
 
-    <script>
-        // Get canvas and context
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const statusMessage = document.getElementById('statusMessage');
-        const playerIndicator = document.getElementById('playerIndicator');
-        const gameControls = document.getElementById('gameControls');
-        const winnerMessage = document.getElementById('winnerMessage');
-        const winnerText = document.getElementById('winnerText');
-        const restartBtn = document.getElementById('restartBtn');
-        
-        // Set canvas size to window size
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+  <script>
+      // Weather System for Stickman Fighter
+      class WeatherSystem {
+        constructor(canvas, ctx) {
+          this.canvas = canvas;
+          this.ctx = ctx;
+          this.weatherType = "none"; // none, rain, snow, storm, fog
+          this.particles = [];
+          this.maxParticles = 200;
+          this.windDirection = 0; // -1 left, 0 none, 1 right
+          this.windStrength = 0;
+          this.fogOpacity = 0;
+          this.lightningActive = false;
+          this.lightningAlpha = 0;
+          this.lastLightningTime = 0;
+
+          // Weather transition variables
+          this.transitioning = false;
+          this.transitionProgress = 0;
+          this.transitionTarget = "none";
+          this.transitionSpeed = 0.01;
+
+          // Weather cycle variables
+          this.autoCycle = false;
+          this.weatherDuration = 30000; // 30 seconds per weather
+          this.lastWeatherChange = Date.now();
+          this.availableWeathers = ["none", "rain", "snow", "storm", "fog"];
         }
-        
-        // Call resize on load and when window is resized
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-        
-        // Game variables
-        let socket;
-        let playerId;
-        let players = {};
-        let gameStarted = false;
-        let backgroundColor = '#334';
-        let weatherType = 'clear';
-        let timeOfDay = 'day';
-        let particles = [];
-        let readyPlayers = [];
-        
-        // Connect to Glitch server
-        function connectToServer() {
-            try {
-                // Connect to the Glitch server
-                const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
-                socket = io(GLITCH_SERVER_URL, {
-                    transports: ['websocket', 'polling'],
-                    reconnectionAttempts: 5
-                });
-                
-                console.log("Attempting to connect to server:", GLITCH_SERVER_URL);
-                
-                // Connection successful
-                socket.on('connect', function() {
-                    console.log('Connected to server');
-                    statusMessage.textContent = 'Waiting for another player to join...';
-                });
-                
-                // Connection error
-                socket.on('connect_error', function(error) {
-                    console.error('Connection error:', error);
-                    statusMessage.textContent = 'Connection error. Please try again.';
-                    // Try to reconnect after 3 seconds
-                    setTimeout(connectToServer, 3000);
-                });
-                
-                // Receive player ID
-                socket.on('playerId', function(id) {
-                    playerId = id;
-                    console.log('Your player ID:', playerId);
-                    
-                    // Show player indicator
-                    playerIndicator.textContent = 
-                        id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
-                    
-                    // Show game controls
-                    gameControls.style.display = 'flex';
-                });
-                
-                // Receive game state
-                socket.on('gameState', function(state) {
-                    players = state.players;
-                    gameStarted = state.gameStarted;
-                    
-                    // Hide status message when game starts
-                    if (gameStarted) {
-                        statusMessage.style.display = 'none';
-                    } else {
-                        statusMessage.style.display = 'block';
-                    }
-                    
-                    // Check for winner
-                    if (state.winner) {
-                        showWinner(state.winner);
-                    }
-                });
-                
-                // Player ready status
-                socket.on('playerReady', function(players) {
-                    readyPlayers = players;
-                    
-                    // If this player is ready, update button state
-                    if (readyPlayers.includes(playerId)) {
-                        restartBtn.textContent = 'Waiting for other player...';
-                        restartBtn.disabled = true;
-                    }
-                    
-                    // Check if both players are ready
-                    if (readyPlayers.includes('player1') && readyPlayers.includes('player2')) {
-                        // Hide winner message
-                        winnerMessage.style.display = 'none';
-                        
-                        // Tell the server to restart the game
-                        socket.emit('restartGame');
-                    }
-                });
-                
-                // Game restarted
-                socket.on('gameRestarted', function() {
-                    console.log("Game has been restarted by server");
-                    
-                    // Hide winner message
-                    winnerMessage.style.display = 'none';
-                });
-                
-            } catch (error) {
-                console.error('Error connecting to server:', error);
-                statusMessage.textContent = 'Failed to connect to server. Please try again.';
-                // Try to reconnect after 3 seconds
-                setTimeout(connectToServer, 3000);
+
+        // Initialize the weather system
+        init() {
+          // Start with no weather
+          this.setWeather("none");
+        }
+
+        // Set a specific weather type with optional transition
+        setWeather(type, transition = true) {
+          if (!this.availableWeathers.includes(type)) {
+            console.error(`Weather type "${type}" not recognized`);
+            return;
+          }
+
+          if (transition && this.weatherType !== type) {
+            // Start transition to new weather
+            this.transitioning = true;
+            this.transitionTarget = type;
+            this.transitionProgress = 0;
+          } else {
+            // Immediately set weather
+            this.weatherType = type;
+            this.resetWeatherProperties();
+            this.generateParticles();
+          }
+
+          console.log(`Weather changing to: ${type}`);
+        }
+
+        // Reset weather properties based on current type
+        resetWeatherProperties() {
+          // Clear existing particles
+          this.particles = [];
+
+          // Set properties based on weather type
+          switch (this.weatherType) {
+            case "none":
+              this.maxParticles = 0;
+              this.windDirection = 0;
+              this.windStrength = 0;
+              this.fogOpacity = 0;
+              break;
+
+            case "rain":
+              this.maxParticles = 200;
+              this.windDirection = Math.random() > 0.5 ? -1 : 1;
+              this.windStrength = 1 + Math.random() * 2;
+              this.fogOpacity = 0.1;
+              break;
+
+            case "snow":
+              this.maxParticles = 150;
+              this.windDirection = Math.random() > 0.5 ? -1 : 1;
+              this.windStrength = 0.5 + Math.random();
+              this.fogOpacity = 0.15;
+              break;
+
+            case "storm":
+              this.maxParticles = 250;
+              this.windDirection = Math.random() > 0.5 ? -1 : 1;
+              this.windStrength = 3 + Math.random() * 3;
+              this.fogOpacity = 0.25;
+              break;
+
+            case "fog":
+              this.maxParticles = 50;
+              this.windDirection = 0;
+              this.windStrength = 0.2;
+              this.fogOpacity = 0.4;
+              break;
+          }
+        }
+
+        // Generate particles based on current weather type
+        generateParticles() {
+          this.particles = [];
+
+          for (let i = 0; i < this.maxParticles; i++) {
+            this.addParticle();
+          }
+        }
+
+        // Add a single particle
+        addParticle() {
+          if (this.particles.length >= this.maxParticles) return;
+
+          const particle = {
+            x: Math.random() * this.canvas.width,
+            y: Math.random() * this.canvas.height,
+            size: 1,
+            speed: 1,
+            opacity: 1,
+            wind: 0,
+          };
+
+          // Customize particle based on weather type
+          switch (this.weatherType) {
+            case "rain":
+              particle.y = Math.random() * -100;
+              particle.size = 1 + Math.random();
+              particle.speed = 10 + Math.random() * 10;
+              particle.wind = this.windDirection * this.windStrength;
+              particle.length = 10 + Math.random() * 20;
+              particle.opacity = 0.6 + Math.random() * 0.4;
+              break;
+
+            case "snow":
+              particle.y = Math.random() * -50;
+              particle.size = 2 + Math.random() * 3;
+              particle.speed = 1 + Math.random() * 2;
+              particle.wind = this.windDirection * this.windStrength;
+              particle.wobble = Math.random() * 0.1;
+              particle.wobbleSpeed = 0.01 + Math.random() * 0.05;
+              particle.wobblePos = Math.random() * Math.PI * 2;
+              particle.opacity = 0.7 + Math.random() * 0.3;
+              break;
+
+            case "storm":
+              particle.y = Math.random() * -100;
+              particle.size = 1 + Math.random() * 2;
+              particle.speed = 15 + Math.random() * 15;
+              particle.wind = this.windDirection * this.windStrength;
+              particle.length = 15 + Math.random() * 25;
+              particle.opacity = 0.5 + Math.random() * 0.5;
+              break;
+
+            case "fog":
+              particle.x = Math.random() * this.canvas.width;
+              particle.y = this.canvas.height - 50 - Math.random() * 100;
+              particle.size = 50 + Math.random() * 100;
+              particle.speed = 0.2 + Math.random() * 0.3;
+              particle.wind = this.windDirection * this.windStrength;
+              particle.opacity = 0.05 + Math.random() * 0.1;
+              break;
+          }
+
+          this.particles.push(particle);
+        }
+
+        // Update weather system
+        update(deltaTime) {
+          // Handle automatic weather cycling
+          if (this.autoCycle && !this.transitioning) {
+            const now = Date.now();
+            if (now - this.lastWeatherChange > this.weatherDuration) {
+              // Pick a new random weather that's different from current
+              let newWeather;
+              do {
+                const randomIndex = Math.floor(Math.random() * this.availableWeathers.length);
+                newWeather = this.availableWeathers[randomIndex];
+              } while (newWeather === this.weatherType);
+
+              this.setWeather(newWeather);
+              this.lastWeatherChange = now;
             }
-        }
-        
-        // Show winner message
-        function showWinner(winner) {
-            winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
-            winnerMessage.style.display = 'block';
-            
-            // Reset restart button
-            restartBtn.textContent = 'Play Again';
-            restartBtn.disabled = false;
-        }
-        
-        // Game loop
-        function gameLoop() {
-            // Clear canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw background
-            drawBackground();
-            
-            // Draw players
-            drawPlayers();
-            
-            // Draw weather
-            drawWeather();
-            
-            // Continue loop
-            requestAnimationFrame(gameLoop);
-        }
-        
-        // Draw background
-        function drawBackground() {
-            // Sky color based on time of day
-            let skyColor;
-            switch (timeOfDay) {
-                case 'day':
-                    skyColor = '#87CEEB';
-                    break;
-                case 'sunset':
-                    skyColor = '#FF7F50';
-                    break;
-                case 'night':
-                    skyColor = '#191970';
-                    break;
-                default:
-                    skyColor = '#87CEEB';
+          }
+
+          // Handle weather transitions
+          if (this.transitioning) {
+            this.transitionProgress += this.transitionSpeed * (deltaTime / 16.67);
+
+            if (this.transitionProgress >= 1) {
+              this.transitioning = false;
+              this.weatherType = this.transitionTarget;
+              this.resetWeatherProperties();
+              this.generateParticles();
             }
-            
-            // Draw sky gradient
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, skyColor);
-            gradient.addColorStop(1, backgroundColor);
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw floor
-            ctx.fillStyle = '#554433';
-            ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+          }
+
+          // Update particles based on weather type
+          this.updateParticles(deltaTime);
+
+          // Handle lightning for storm weather
+          if (this.weatherType === "storm" || (this.transitioning && this.transitionTarget === "storm")) {
+            this.updateLightning(deltaTime);
+          } else {
+            this.lightningActive = false;
+            this.lightningAlpha = 0;
+          }
         }
-        
-        // Draw players
-        function drawPlayers() {
-            if (!players.player1 || !players.player2) return;
-            
-            // Draw player 1
-            drawStickman(
-                players.player1.x, 
-                canvas.height - 130, 
-                '#FF5555', 
-                players.player1.power, 
-                players.player1.state
-            );
-            
-            // Draw player 2
-            drawStickman(
-                players.player2.x, 
-                canvas.height - 130, 
-                '#5555FF', 
-                players.player2.power, 
-                players.player2.state
-            );
-        }
-        
-        // Draw a stickman
-        function drawStickman(x, y, color, health, state) {
-            const width = 30;
-            const height = 80;
-            
-            ctx.save();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            // Head
-            ctx.beginPath();
-            ctx.arc(x + width/2, y + 10, 10, 0, Math.PI * 2);
-            ctx.stroke();
-            
-            // Body
-            ctx.beginPath();
-            ctx.moveTo(x + width/2, y + 20);
-            ctx.lineTo(x + width/2, y + 50);
-            ctx.stroke();
-            
-            // Arms
-            if (state === 'hitting') {
-                // Hitting pose
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + width - 5, y + 20);
-                ctx.lineTo(x + width + 15, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + 5, y + 40);
-                ctx.stroke();
-            } else if (state === 'kicking') {
-                // Kicking pose
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + width - 5, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + 5, y + 25);
-                ctx.stroke();
-            } else {
-                // Normal pose
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + width - 5, y + 25);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 30);
-                ctx.lineTo(x + 5, y + 25);
-                ctx.stroke();
+
+        // Update all particles
+        updateParticles(deltaTime) {
+          // Normalize for 60fps
+          const timeScale = deltaTime / 16.67;
+
+          // Update existing particles
+          for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+
+            // Apply movement based on weather type
+            switch (this.weatherType) {
+              case "rain":
+              case "storm":
+                p.y += p.speed * timeScale;
+                p.x += p.wind * timeScale;
+
+                // Remove if out of bounds
+                if (p.y > this.canvas.height) {
+                  this.particles.splice(i, 1);
+                  this.addParticle();
+                }
+                break;
+
+              case "snow":
+                p.y += p.speed * timeScale;
+                p.wobblePos += p.wobbleSpeed * timeScale;
+                p.x += p.wind * timeScale + Math.sin(p.wobblePos) * 2;
+
+                // Remove if out of bounds
+                if (p.y > this.canvas.height) {
+                  this.particles.splice(i, 1);
+                  this.addParticle();
+                }
+                break;
+
+              case "fog":
+                p.x += p.wind * timeScale;
+
+                // Wrap around if out of bounds
+                if (p.x > this.canvas.width + p.size) {
+                  p.x = -p.size;
+                } else if (p.x < -p.size) {
+                  p.x = this.canvas.width + p.size;
+                }
+                break;
             }
-            
-            // Legs
-            if (state === 'kicking') {
-                // Kicking pose
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 50);
-                ctx.lineTo(x + 10, y + 70);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 50);
-                ctx.lineTo(x + width + 20, y + 60);
-                ctx.stroke();
-            } else {
-                // Normal pose
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 50);
-                ctx.lineTo(x + 10, y + 70);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(x + width/2, y + 50);
-                ctx.lineTo(x + width - 10, y + 70);
-                ctx.stroke();
-            }
-            
-            // Health bar
-            ctx.fillStyle = '#333';
-            ctx.fillRect(x, y - 20, width, 5);
-            ctx.fillStyle = '#00FF00';
-            ctx.fillRect(x, y - 20, width * (health / 100), 5);
-            
-            ctx.restore();
+          }
+
+          // Add new particles if needed
+          while (this.particles.length < this.maxParticles && this.weatherType !== "none") {
+            this.addParticle();
+          }
         }
-        
+
+        // Update lightning effect for storm weather
+        updateLightning(deltaTime) {
+          const now = Date.now();
+
+          // If lightning is active, fade it out
+          if (this.lightningActive) {
+            this.lightningAlpha -= 0.05 * (deltaTime / 16.67);
+            if (this.lightningAlpha <= 0) {
+              this.lightningActive = false;
+              this.lightningAlpha = 0;
+            }
+          }
+          // Otherwise, randomly trigger new lightning
+          else if (now - this.lastLightningTime > 3000) {
+            // At least 3 seconds between strikes
+            if (Math.random() < 0.01 * (deltaTime / 16.67)) {
+              this.lightningActive = true;
+              this.lightningAlpha = 0.8 + Math.random() * 0.2;
+              this.lastLightningTime = now;
+
+              // Play thunder sound if available
+              if (window.playSound && Math.random() < 0.7) {
+                setTimeout(
+                  () => {
+                    if (window.soundEnabled) {
+                      window.playSound("thunder");
+                    }
+                  },
+                  300 + Math.random() * 1000
+                ); // Thunder delay after lightning
+              }
+            }
+          }
+        }
+
         // Draw weather effects
-        function drawWeather() {
-            if (weatherType === 'clear') return;
-            
-            // Create particles if needed
-            if (particles.length < 100) {
-                for (let i = 0; i < 100; i++) {
-                    createParticle();
-                }
+        draw() {
+          // Skip if no weather or fully transitioning out
+          if (this.weatherType === "none" && !this.transitioning) return;
+          if (this.transitioning && this.transitionTarget === "none" && this.transitionProgress > 0.9) return;
+
+          // Calculate opacity based on transition
+          let opacity = 1;
+          if (this.transitioning) {
+            if (this.transitionTarget === "none") {
+              opacity = 1 - this.transitionProgress;
+            } else if (this.weatherType === "none") {
+              opacity = this.transitionProgress;
             }
-            
-            // Update and draw particles
-            for (let i = 0; i < particles.length; i++) {
-                const p = particles[i];
-                
-                // Update position
-                p.y += p.speed;
-                
-                if (weatherType === 'snow') {
-                    p.x += Math.sin(p.angle) * 0.5;
-                    p.angle += 0.01;
-                } else if (weatherType === 'rain' || weatherType === 'storm') {
-                    p.x += p.wind;
-                }
-                
-                // Reset if off screen
-                if (p.y > canvas.height) {
-                    p.y = -10;
-                    p.x = Math.random() * canvas.width;
-                    if (weatherType === 'snow') {
-                        p.angle = Math.random() * Math.PI * 2;
-                    }
-                }
-                
-                // Draw particle
-                ctx.fillStyle = p.color;
-                if (weatherType === 'rain' || weatherType === 'storm') {
-                    ctx.beginPath();
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.x + p.wind, p.y + p.size);
-                    ctx.stroke();
-                } else {
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size/2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+          }
+
+          // Draw lightning flash
+          if (this.lightningActive) {
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${this.lightningAlpha * opacity})`;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+          }
+
+          // Draw fog overlay
+          if (this.fogOpacity > 0) {
+            const fogOpacity = this.transitioning ? this.fogOpacity * opacity : this.fogOpacity;
+
+            this.ctx.fillStyle = `rgba(200, 215, 220, ${fogOpacity})`;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+          }
+
+          // Draw particles
+          for (const p of this.particles) {
+            // Skip if fully transparent
+            if (p.opacity * opacity <= 0) continue;
+
+            this.ctx.save();
+
+            switch (this.weatherType) {
+              case "rain":
+              case "storm":
+                // Draw rain drop
+                this.ctx.strokeStyle = `rgba(200, 230, 255, ${p.opacity * opacity})`;
+                this.ctx.lineWidth = p.size;
+                this.ctx.beginPath();
+                this.ctx.moveTo(p.x, p.y);
+                this.ctx.lineTo(p.x + p.wind * 0.5, p.y + p.length);
+                this.ctx.stroke();
+                break;
+
+              case "snow":
+                // Draw snowflake
+                this.ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity * opacity})`;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                this.ctx.fill();
+                break;
+
+              case "fog":
+                // Draw fog particle
+                const gradient = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                gradient.addColorStop(0, `rgba(230, 240, 245, ${p.opacity * opacity})`);
+                gradient.addColorStop(1, `rgba(230, 240, 245, 0)`);
+
+                this.ctx.fillStyle = gradient;
+                this.ctx.beginPath();
+                this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                this.ctx.fill();
+                break;
             }
-            
-            // Draw lightning for storm
-            if (weatherType === 'storm' && Math.random() < 0.01) {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            this.ctx.restore();
+          }
+        }
+
+        // Enable automatic weather cycling
+        enableAutoCycle(duration = 30000) {
+          this.autoCycle = true;
+          this.weatherDuration = duration;
+          this.lastWeatherChange = Date.now();
+          console.log(`Auto weather cycling enabled (${duration / 1000}s per weather)`);
+        }
+
+        // Disable automatic weather cycling
+        disableAutoCycle() {
+          this.autoCycle = false;
+          console.log("Auto weather cycling disabled");
+        }
+      }
+
+      // Background Manager for Stickman Fighter
+      class BackgroundManager {
+        constructor(canvas, ctx) {
+          this.canvas = canvas;
+          this.ctx = ctx;
+          this.currentBackground = "dojo";
+          this.backgrounds = {
+            // Default background
+            dojo: {
+              layers: [
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/dojo-bg.png", x: 0, y: 0, parallax: 0 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/dojo-floor.png", x: 0, y: 0, parallax: 0.1 },
+              ],
+              floorY: 50,
+              skyColor: "#1a2a3a",
+              floorColor: "#554433",
+            },
+            // Mountain background
+            mountain: {
+              layers: [
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-sky.png", x: 0, y: 0, parallax: 0 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-far.png", x: 0, y: 0, parallax: 0.1 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-mid.png", x: 0, y: 0, parallax: 0.2 },
+                {
+                  image: null,
+                  src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-ground.png",
+                  x: 0,
+                  y: 0,
+                  parallax: 0.3,
+                },
+              ],
+              floorY: 50,
+              skyColor: "#4a6a8a",
+              floorColor: "#5d4b35",
+            },
+            // City background
+            city: {
+              layers: [
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-sky.png", x: 0, y: 0, parallax: 0 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-buildings.png", x: 0, y: 0, parallax: 0.1 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-street.png", x: 0, y: 0, parallax: 0.3 },
+              ],
+              floorY: 50,
+              skyColor: "#3a4a5a",
+              floorColor: "#333333",
+            },
+            // Beach background
+            beach: {
+              layers: [
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-sky.png", x: 0, y: 0, parallax: 0 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-ocean.png", x: 0, y: 0, parallax: 0.05 },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-sand.png", x: 0, y: 0, parallax: 0.2 },
+              ],
+              floorY: 50,
+              skyColor: "#87ceeb",
+              floorColor: "#f5deb3",
+            },
+            // Night forest background
+            forest: {
+              layers: [
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/forest-sky.png", x: 0, y: 0, parallax: 0 },
+                {
+                  image: null,
+                  src: "/Stickman-Fighter-v2/assets/backgrounds/forest-trees-far.png",
+                  x: 0,
+                  y: 0,
+                  parallax: 0.1,
+                },
+                {
+                  image: null,
+                  src: "/Stickman-Fighter-v2/assets/backgrounds/forest-trees-near.png",
+                  x: 0,
+                  y: 0,
+                  parallax: 0.2,
+                },
+                { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/forest-ground.png", x: 0, y: 0, parallax: 0.3 },
+              ],
+              floorY: 50,
+              skyColor: "#0a1a2a",
+              floorColor: "#2a1a0a",
+            },
+          };
+
+          // Transition properties
+          this.transitioning = false;
+          this.transitionProgress = 0;
+          this.transitionSpeed = 0.02;
+          this.transitionTarget = "";
+
+          // Background animation properties
+          this.animationOffset = 0;
+          this.animationSpeed = 0.2;
+          this.parallaxOffset = 0;
+
+          // Time of day effect
+          this.timeOfDay = "day"; // day, sunset, night, dawn
+          this.timeOverlay = 0;
+          this.timeColor = "rgba(0, 0, 0, 0)";
+
+          // Auto cycle properties
+          this.autoCycle = false;
+          this.cycleDuration = 60000; // 60 seconds per background
+          this.lastCycleTime = Date.now();
+          this.availableBackgrounds = Object.keys(this.backgrounds);
+
+          // Placeholder images until real assets are loaded
+          this.placeholderImages = {};
+        }
+
+        // Initialize the background manager
+        async init() {
+          // Create placeholder images for backgrounds
+          await this.createPlaceholders();
+
+          // Load the current background
+          await this.loadBackground(this.currentBackground);
+
+          console.log("Background manager initialized");
+        }
+
+        // Create placeholder images for backgrounds
+        async createPlaceholders() {
+          // For each background type
+          for (const [bgName, bg] of Object.entries(this.backgrounds)) {
+            this.placeholderImages[bgName] = [];
+
+            // For each layer in the background
+            for (let i = 0; i < bg.layers.length; i++) {
+              // Create a placeholder canvas
+              const placeholderCanvas = document.createElement("canvas");
+              placeholderCanvas.width = this.canvas.width;
+              placeholderCanvas.height = this.canvas.height;
+              const placeholderCtx = placeholderCanvas.getContext("2d");
+
+              // Draw a gradient background
+              const gradient = placeholderCtx.createLinearGradient(0, 0, 0, placeholderCanvas.height);
+
+              // Different colors based on layer index and background type
+              if (i === 0) {
+                // Sky layer
+                gradient.addColorStop(0, bg.skyColor);
+                gradient.addColorStop(1, this.lightenColor(bg.skyColor, 30));
+              } else if (i === bg.layers.length - 1) {
+                // Ground/floor layer
+                gradient.addColorStop(0, this.darkenColor(bg.floorColor, 20));
+                gradient.addColorStop(1, bg.floorColor);
+              } else {
+                // Middle layers
+                const midColor = this.blendColors(bg.skyColor, bg.floorColor, i / bg.layers.length);
+                gradient.addColorStop(0, this.lightenColor(midColor, 10));
+                gradient.addColorStop(1, this.darkenColor(midColor, 10));
+              }
+
+              placeholderCtx.fillStyle = gradient;
+              placeholderCtx.fillRect(0, 0, placeholderCanvas.width, placeholderCanvas.height);
+
+              // Add some random elements based on background type
+              placeholderCtx.fillStyle = "rgba(255, 255, 255, 0.1)";
+
+              if (bgName === "mountain") {
+                // Draw mountain silhouettes
+                this.drawMountainSilhouette(placeholderCtx, i);
+              } else if (bgName === "city") {
+                // Draw building silhouettes
+                this.drawCitySilhouette(placeholderCtx, i);
+              } else if (bgName === "beach") {
+                // Draw waves or palm trees
+                this.drawBeachElements(placeholderCtx, i);
+              } else if (bgName === "forest") {
+                // Draw tree silhouettes
+                this.drawForestSilhouette(placeholderCtx, i);
+              }
+
+              // Store the placeholder image
+              this.placeholderImages[bgName].push(placeholderCanvas);
             }
+          }
         }
-        
-        // Create a weather particle
-        function createParticle() {
-            const particle = {
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height - canvas.height,
-                size: 0,
-                speed: 0,
-                angle: Math.random() * Math.PI * 2,
-                wind: 0,
-                color: 'white'
-            };
-            
-            // Set properties based on weather type
-            switch (weatherType) {
-                case 'rain':
-                    particle.size = 10;
-                    particle.speed = 15;
-                    particle.wind = -2;
-                    particle.color = 'rgba(120, 180, 255, 0.8)';
-                    break;
-                case 'snow':
-                    particle.size = 3;
-                    particle.speed = 2;
-                    particle.color = 'rgba(255, 255, 255, 0.8)';
-                    break;
-                case 'storm':
-                    particle.size = 15;
-                    particle.speed = 20;
-                    particle.wind = -4;
-                    particle.color = 'rgba(120, 180, 255, 0.8)';
-                    break;
+
+        // Helper method to draw mountain silhouettes
+        drawMountainSilhouette(ctx, layerIndex) {
+          if (layerIndex === 0) return; // Skip sky layer
+
+          ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+
+          const height = ctx.canvas.height;
+          const width = ctx.canvas.width;
+
+          // Draw a series of mountain peaks
+          ctx.beginPath();
+          ctx.moveTo(0, height);
+
+          const peaks = 3 + layerIndex * 2;
+          const peakWidth = width / peaks;
+
+          for (let i = 0; i <= peaks; i++) {
+            const x = i * peakWidth;
+            const peakHeight = 50 + Math.random() * 100;
+
+            if (i === 0) {
+              ctx.lineTo(x, height - peakHeight / 2);
+            } else {
+              ctx.lineTo(x - peakWidth / 3, height - peakHeight / 3);
+              ctx.lineTo(x, height - peakHeight);
+              ctx.lineTo(x + peakWidth / 3, height - peakHeight / 3);
             }
-            
-            particles.push(particle);
+          }
+
+          ctx.lineTo(width, height);
+          ctx.closePath();
+          ctx.fill();
         }
-        
-        // Set background
-        function setBackground(bg) {
-            switch (bg) {
-                case 'forest':
-                    backgroundColor = '#228B22';
-                    break;
-                case 'mountain':
-                    backgroundColor = '#708090';
-                    break;
-                case 'city':
-                    backgroundColor = '#4682B4';
-                    break;
-                default:
-                    backgroundColor = '#334';
+
+        // Helper method to draw city silhouettes
+        drawCitySilhouette(ctx, layerIndex) {
+          if (layerIndex === 0) return; // Skip sky layer
+
+          ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+
+          const height = ctx.canvas.height;
+          const width = ctx.canvas.width;
+
+          // Draw a series of buildings
+          ctx.beginPath();
+          ctx.moveTo(0, height);
+
+          const buildings = 10 + layerIndex * 5;
+          const buildingWidth = width / buildings;
+
+          for (let i = 0; i < buildings; i++) {
+            const x = i * buildingWidth;
+            const buildingHeight = 30 + Math.random() * 150;
+
+            ctx.lineTo(x, height - buildingHeight);
+            ctx.lineTo(x, height - buildingHeight);
+            ctx.lineTo(x + buildingWidth, height - buildingHeight);
+            ctx.lineTo(x + buildingWidth, height);
+          }
+
+          ctx.closePath();
+          ctx.fill();
+        }
+
+        // Helper method to draw beach elements
+        drawBeachElements(ctx, layerIndex) {
+          const height = ctx.canvas.height;
+          const width = ctx.canvas.width;
+
+          if (layerIndex === 1) {
+            // Draw ocean waves
+            ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+
+            for (let i = 0; i < 5; i++) {
+              const y = height / 2 + i * 20;
+
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+
+              for (let x = 0; x < width; x += 20) {
+                ctx.quadraticCurveTo(x + 10, y - 5 - Math.random() * 5, x + 20, y);
+              }
+
+              ctx.lineTo(width, height);
+              ctx.lineTo(0, height);
+              ctx.closePath();
+              ctx.fill();
             }
+          } else if (layerIndex === 2) {
+            // Draw palm trees
+            ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+
+            for (let i = 0; i < 3; i++) {
+              const x = width * (0.2 + i * 0.3);
+              const trunkHeight = 100 + Math.random() * 50;
+
+              // Draw trunk
+              ctx.beginPath();
+              ctx.moveTo(x - 5, height);
+              ctx.lineTo(x - 5, height - trunkHeight);
+              ctx.lineTo(x + 5, height - trunkHeight);
+              ctx.lineTo(x + 5, height);
+              ctx.closePath();
+              ctx.fill();
+
+              // Draw palm leaves
+              ctx.beginPath();
+              for (let j = 0; j < 5; j++) {
+                const angle = (Math.PI / 5) * j;
+                const leafLength = 30 + Math.random() * 20;
+
+                ctx.moveTo(x, height - trunkHeight);
+                ctx.quadraticCurveTo(
+                  x + Math.cos(angle) * leafLength * 0.6,
+                  height - trunkHeight - Math.sin(angle) * leafLength * 0.6,
+                  x + Math.cos(angle) * leafLength,
+                  height - trunkHeight - Math.sin(angle) * leafLength
+                );
+              }
+              ctx.stroke();
+            }
+          }
         }
-        
-        // Set weather type
-        function setWeather(type) {
-            weatherType = type;
-            particles = []; // Clear existing particles
+
+        // Helper method to draw forest silhouettes
+        drawForestSilhouette(ctx, layerIndex) {
+          if (layerIndex === 0) return; // Skip sky layer
+
+          const height = ctx.canvas.height;
+          const width = ctx.canvas.width;
+
+          // Draw trees
+          ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+
+          const trees = 5 + layerIndex * 3;
+          const treeSpacing = width / trees;
+
+          for (let i = 0; i < trees; i++) {
+            const x = (i + 0.5) * treeSpacing;
+            const treeHeight = 80 + Math.random() * 120;
+
+            // Draw tree trunk
+            ctx.fillRect(x - 5, height - treeHeight, 10, treeHeight);
+
+            // Draw tree crown
+            ctx.beginPath();
+            ctx.arc(x, height - treeHeight, 30 + Math.random() * 20, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
-        
-        // Set time of day
-        function setTimeOfDay(time) {
-            timeOfDay = time;
+
+        // Helper method to lighten a color
+        lightenColor(color, amount) {
+          return this.adjustColor(color, amount);
         }
-        
-        // Setup control buttons
-        function setupControls() {
-            // Background buttons
-            document.getElementById('bgForest').addEventListener('click', () => setBackground('forest'));
-            document.getElementById('bgMountain').addEventListener('click', () => setBackground('mountain'));
-            document.getElementById('bgCity').addEventListener('click', () => setBackground('city'));
-            
-            // Weather buttons
-            document.getElementById('weatherClear').addEventListener('click', () => setWeather('clear'));
-            document.getElementById('weatherRain').addEventListener('click', () => setWeather('rain'));
-            document.getElementById('weatherSnow').addEventListener('click', () => setWeather('snow'));
-            document.getElementById('weatherStorm').addEventListener('click', () => setWeather('storm'));
-            
-            // Time of day buttons
-            document.getElementById('timeDay').addEventListener('click', () => setTimeOfDay('day'));
-            document.getElementById('timeSunset').addEventListener('click', () => setTimeOfDay('sunset'));
-            document.getElementById('timeNight').addEventListener('click', () => setTimeOfDay('night'));
-            
-            // Game control buttons
-            document.getElementById('moveLeft').addEventListener('mousedown', () => {
-                if (socket && playerId) socket.emit('move', {direction: 'left'});
-            });
-            document.getElementById('moveLeft').addEventListener('mouseup', () => {
-                if (socket && playerId) socket.emit('stopMove');
-            });
-            document.getElementById('moveLeft').addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('move', {direction: 'left'});
-            });
-            document.getElementById('moveLeft').addEventListener('touchend', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('stopMove');
-            });
-            
-            document.getElementById('moveRight').addEventListener('mousedown', () => {
-                if (socket && playerId) socket.emit('move', {direction: 'right'});
-            });
-            document.getElementById('moveRight').addEventListener('mouseup', () => {
-                if (socket && playerId) socket.emit('stopMove');
-            });
-            document.getElementById('moveRight').addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('move', {direction: 'right'});
-            });
-            document.getElementById('moveRight').addEventListener('touchend', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('stopMove');
-            });
-            
-            document.getElementById('hitBtn').addEventListener('click', () => {
-                if (socket && playerId) socket.emit('attack', {type: 'hit'});
-            });
-            document.getElementById('hitBtn').addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('attack', {type: 'hit'});
-            });
-            
-            document.getElementById('kickBtn').addEventListener('click', () => {
-                if (socket && playerId) socket.emit('attack', {type: 'kick'});
-            });
-            document.getElementById('kickBtn').addEventListener('touchstart', (e) => {
-                e.preventDefault();
-                if (socket && playerId) socket.emit('attack', {type: 'kick'});
-            });
-            
-            // Restart button
-            restartBtn.addEventListener('click', () => {
-                if (socket && playerId) {
-                    // Send player ready status to server
-                    socket.emit('playerReady', playerId);
-                    
-                    // Update button state
-                    restartBtn.textContent = 'Waiting for other player...';
-                    restartBtn.disabled = true;
-                }
-            });
-            
-            // Keyboard controls
-            window.addEventListener('keydown', (e) => {
-                if (!socket || !playerId) return;
-                
-                if (e.key === 'a' || e.key === 'ArrowLeft') {
-                    socket.emit('move', {direction: 'left'});
-                }
-                else if (e.key === 'd' || e.key === 'ArrowRight') {
-                    socket.emit('move', {direction: 'right'});
-                }
-                else if (e.key === 'q' || e.key === ',') {
-                    socket.emit('attack', {type: 'hit'});
-                }
-                else if (e.key === 'e' || e.key === '.') {
-                    socket.emit('attack', {type: 'kick'});
-                }
-            });
-            
-            window.addEventListener('keyup', (e) => {
-                if (!socket || !playerId) return;
-                
-                if (e.key === 'a' || e.key === 'd' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                    socket.emit('stopMove');
-                }
-            });
+
+        // Helper method to darken a color
+        darkenColor(color, amount) {
+          return this.adjustColor(color, -amount);
         }
-        
-        // Initialize game
-        function init() {
-            // Setup controls
-            setupControls();
-            
-            // Connect to server
-            connectToServer();
-            
-            // Start game loop
-            gameLoop();
+
+        // Helper method to adjust a color's brightness
+        adjustColor(color, amount) {
+          // Convert hex to rgb
+          let r, g, b;
+
+          if (color.startsWith("#")) {
+            const hex = color.substring(1);
+            r = parseInt(hex.substr(0, 2), 16);
+            g = parseInt(hex.substr(2, 2), 16);
+            b = parseInt(hex.substr(4, 2), 16);
+          } else if (color.startsWith("rgb")) {
+            const match = color.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+            if (match) {
+              r = parseInt(match[1]);
+              g = parseInt(match[2]);
+              b = parseInt(match[3]);
+            } else {
+              return color;
+            }
+          } else {
+            return color;
+          }
+
+          // Adjust brightness
+          r = Math.max(0, Math.min(255, r + amount));
+          g = Math.max(0, Math.min(255, g + amount));
+          b = Math.max(0, Math.min(255, b + amount));
+
+          return `rgb(${r}, ${g}, ${b})`;
         }
-        
-        // Start the game
-        init();
-    </script>
+
+        // Helper method to blend two colors
+        blendColors(color1, color2, ratio) {
+          // Convert colors to rgb
+          let r1, g1, b1, r2, g2, b2;
+
+          // Parse color1
+          if (color1.startsWith("#")) {
+            const hex = color1.substring(1);
+            r1 = parseInt(hex.substr(0, 2), 16);
+            g1 = parseInt(hex.substr(2, 2), 16);
+            b1 = parseInt(hex.substr(4, 2), 16);
+          } else if (color1.startsWith("rgb")) {
+            const match = color1.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+            if (match) {
+              r1 = parseInt(match[1]);
+              g1 = parseInt(match[2]);
+              b1 = parseInt(match[3]);
+            } else {
+              return color1;
+            }
+          } else {
+            return color1;
+          }
+
+          // Parse color2
+          if (color2.startsWith("#")) {
+            const hex = color2.substring(1);
+            r2 = parseInt(hex.substr(0, 2), 16);
+            g2 = parseInt(hex.substr(2, 2), 16);
+            b2 = parseInt(hex.substr(4, 2), 16);
+          } else if (color2.startsWith("rgb")) {
+            const match = color2.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+            if (match) {
+              r2 = parseInt(match[1]);
+              g2 = parseInt(match[2]);
+              b2 = parseInt(match[3]);
+            } else {
+              return color2;
+            }
+          } else {
+            return color2;
+          }
+
+          // Blend colors
+          const r = Math.round(r1 * (1 - ratio) + r2 * ratio);
+          const g = Math.round(g1 * (1 - ratio) + g2 * ratio);
+          const b = Math.round(b1 * (1 - ratio) + b2 * ratio);
+
+          return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        // Load a background by name
+        async loadBackground(name) {
+          if (!this.backgrounds[name]) {
+            console.error(`Background "${name}" not found`);
+            return false;
+          }
+
+          const bg = this.backgrounds[name];
+
+          // Load all layer images
+          const promises = bg.layers.map((layer, index) => {
+            return new Promise((resolve) => {
+              if (layer.image) {
+                // Image already loaded
+                resolve();
+                return;
+              }
+
+              // Create a new image
+              const img = new Image();
+
+              // Set up load handler
+              img.onload = () => {
+                layer.image = img;
+                resolve();
+              };
+
+              // Set up error handler
+              img.onerror = () => {
+                console.warn(`Failed to load background image: ${layer.src}`);
+                // Use placeholder instead
+                layer.image = this.placeholderImages[name][index];
+                resolve();
+              };
+
+              // Set crossOrigin to avoid CORS issues
+              img.crossOrigin = "anonymous";
+
+              // Start loading
+              img.src = layer.src;
+            });
+          });
+
+          try {
+            await Promise.all(promises);
+            console.log(`Background "${name}" loaded`);
+            return true;
+          } catch (error) {
+            console.error(`Error loading background "${name}":`, error);
+            return false;
+          }
+        }
+
+        // Set the current background with optional transition
+        async setBackground(name, transition = true) {
+          if (!this.backgrounds[name]) {
+            console.error(`Background "${name}" not found`);
+            return false;
+          }
+
+          // Don't transition to the same background
+          if (name === this.currentBackground && !this.transitioning) {
+            return true;
+          }
+
+          // Load the background first
+          const loaded = await this.loadBackground(name);
+          if (!loaded) return false;
+
+          if (transition) {
+            // Start transition
+            this.transitioning = true;
+            this.transitionProgress = 0;
+            this.transitionTarget = name;
+          } else {
+            // Immediately set background
+            this.currentBackground = name;
+          }
+
+          return true;
+        }
+
+        // Set time of day effect
+        setTimeOfDay(time) {
+          this.timeOfDay = time;
+
+          switch (time) {
+            case "day":
+              this.timeOverlay = 0;
+              this.timeColor = "rgba(0, 0, 0, 0)";
+              break;
+
+            case "sunset":
+              this.timeOverlay = 0.3;
+              this.timeColor = "rgba(255, 150, 50, 0.3)";
+              break;
+
+            case "night":
+              this.timeOverlay = 0.5;
+              this.timeColor = "rgba(0, 20, 50, 0.5)";
+              break;
+
+            case "dawn":
+              this.timeOverlay = 0.3;
+              this.timeColor = "rgba(150, 120, 200, 0.3)";
+              break;
+          }
+        }
+
+        // Enable automatic background cycling
+        enableAutoCycle(duration = 60000) {
+          this.autoCycle = true;
+          this.cycleDuration = duration;
+          this.lastCycleTime = Date.now();
+          console.log(`Auto background cycling enabled (${duration / 1000}s per background)`);
+        }
+
+        // Disable automatic background cycling
+        disableAutoCycle() {
+          this.autoCycle = false;
+          console.log("Auto background cycling disabled");
+        }
+
+        // Update background animations and transitions
+        update(deltaTime) {
+          // Handle automatic background cycling
+          if (this.autoCycle && !this.transitioning) {
+            const now = Date.now();
+            if (now - this.lastCycleTime > this.cycleDuration) {
+              // Pick a new random background that's different from current
+              let newBackground;
+              do {
+                const randomIndex = Math.floor(Math.random() * this.availableBackgrounds.length);
+                newBackground = this.availableBackgrounds[randomIndex];
+              } while (newBackground === this.currentBackground);
+
+              this.setBackground(newBackground);
+              this.lastCycleTime = now;
+            }
+          }
+
+          // Update animation offset for parallax effect
+          this.animationOffset += this.animationSpeed * (deltaTime / 16.67);
+          if (this.animationOffset > 1000) this.animationOffset -= 1000;
+
+          // Update transition progress
+          if (this.transitioning) {
+            this.transitionProgress += this.transitionSpeed * (deltaTime / 16.67);
+
+            if (this.transitionProgress >= 1) {
+              this.transitioning = false;
+              this.currentBackground = this.transitionTarget;
+              this.transitionProgress = 0;
+            }
+          }
+        }
+
+        // Draw the current background
+        draw(playerPositions = null) {
+          // Update parallax offset based on player positions
+          if (playerPositions && playerPositions.player1 && playerPositions.player2) {
+            // Calculate the center point between players
+            const centerX = (playerPositions.player1.x + playerPositions.player2.x) / 2;
+
+            // Calculate normalized position (0-1) across the screen
+            const normalizedX = centerX / 800;
+
+            // Set parallax offset
+            this.parallaxOffset = (normalizedX - 0.5) * 100;
+          }
+
+          // Get current background
+          const currentBg = this.backgrounds[this.currentBackground];
+
+          // If transitioning, also get target background
+          const targetBg = this.transitioning ? this.backgrounds[this.transitionTarget] : null;
+
+          // Draw current background layers
+          this.drawBackgroundLayers(currentBg, targetBg);
+
+          // Draw time of day overlay
+          if (this.timeOverlay > 0) {
+            this.ctx.fillStyle = this.timeColor;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+          }
+        }
+
+        // Draw background layers with optional transition
+        drawBackgroundLayers(currentBg, targetBg) {
+          // Calculate canvas dimensions
+          const width = this.canvas.width;
+          const height = this.canvas.height;
+
+          // Draw current background layers
+          for (let i = 0; i < currentBg.layers.length; i++) {
+            const layer = currentBg.layers[i];
+
+            // Skip if no image
+            if (!layer.image) continue;
+
+            // Calculate parallax offset
+            const parallaxX = this.parallaxOffset * layer.parallax;
+
+            // Calculate animation offset for some layers
+            let animX = 0;
+            if (layer.parallax > 0) {
+              animX = (this.animationOffset * layer.parallax) % width;
+            }
+
+            // Draw the layer
+            this.ctx.globalAlpha = this.transitioning ? 1 - this.transitionProgress : 1;
+
+            // Draw the layer (potentially twice for seamless scrolling)
+            this.ctx.drawImage(layer.image, parallaxX - animX, 0, width, height);
+
+            // If the layer has parallax, draw it again for seamless scrolling
+            if (animX > 0) {
+              this.ctx.drawImage(layer.image, parallaxX - animX + width, 0, width, height);
+            }
+          }
+
+          // If transitioning, draw target background layers
+          if (this.transitioning && targetBg) {
+            for (let i = 0; i < targetBg.layers.length; i++) {
+              const layer = targetBg.layers[i];
+
+              // Skip if no image
+              if (!layer.image) continue;
+
+              // Calculate parallax offset
+              const parallaxX = this.parallaxOffset * layer.parallax;
+
+              // Calculate animation offset for some layers
+              let animX = 0;
+              if (layer.parallax > 0) {
+                animX = (this.animationOffset * layer.parallax) % width;
+              }
+
+              // Draw the layer with transition opacity
+              this.ctx.globalAlpha = this.transitionProgress;
+
+              // Draw the layer (potentially twice for seamless scrolling)
+              this.ctx.drawImage(layer.image, parallaxX - animX, 0, width, height);
+
+              // If the layer has parallax, draw it again for seamless scrolling
+              if (animX > 0) {
+                this.ctx.drawImage(layer.image, parallaxX - animX + width, 0, width, height);
+              }
+            }
+          }
+
+          // Reset global alpha
+          this.ctx.globalAlpha = 1;
+        }
+
+        // Get the floor Y position for the current background
+        getFloorY() {
+          const bg = this.backgrounds[this.currentBackground];
+          return this.canvas.height - bg.floorY;
+        }
+      }
+
+      // Game variables
+      let canvas, ctx;
+      let gameWidth, gameHeight;
+      let socket;
+      let playerId;
+      let players = {};
+      let gameStarted = false;
+      let readyPlayers = []; // Track which players are ready
+      let gameState = {};
+      let gameEnding = false; // Flag to track if the game is in the ending sequence
+      let gameEndTime = 0; // Time when the game ended
+      let winnerAnnounced = false; // Flag to track if the winner has been announced
+
+      // Hit detection variables
+      let lastHitTime = 0;
+      let hitFeedback = {
+          active: false,
+          x: 0,
+          y: 0,
+          type: '',
+          time: 0
+      };
+
+      const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
+      
+      // Sound variables
+      let soundEnabled = true;
+      let sounds = {};
+      let soundsLoaded = false;
+      
+      // Game constants
+      const PLAYER_WIDTH = 30;
+      const PLAYER_HEIGHT = 80;
+      const PLAYER_SPEED = 5;
+      const MAX_POWER = 100;
+      const HIT_DAMAGE = 10;
+      const KICK_DAMAGE = 15;
+      const HIT_RANGE = 40;
+      const KICK_RANGE = 50;
+      const GAME_END_DELAY = 1500; // Delay before showing winner message (ms)
+
+      // Hit detection constants
+      const HEAD_HITBOX_RADIUS = 10;
+      const BODY_HITBOX_WIDTH = 20;
+      const BODY_HITBOX_HEIGHT = 30;
+      const ARM_HITBOX_WIDTH = 30;
+      const LEG_HITBOX_WIDTH = 30;
+      const CRITICAL_HIT_MULTIPLIER = 1.5;
+      const HIT_COOLDOWN = 300; // ms
+      const HIT_FEEDBACK_DURATION = 200; // ms
+      
+      // Animation states
+      const IDLE = 'idle';
+      const HITTING = 'hitting';
+      const KICKING = 'kicking';
+      const HURT = 'hurt';
+      const WALKING = 'walking';
+      const VICTORY = 'victory';
+      const DEFEAT = 'defeat';
+      
+      // Animation variables
+      let animationFrame = 0;
+      const ANIMATION_SPEED = 0.1; // Lower is slower
+      let lastTime = 0;
+      
+      // Animation data for each player
+      const playerAnimations = {
+          player1: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: 1,
+              victoryJump: 0,
+              defeatFall: 0
+          },
+          player2: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: -1,
+              victoryJump: 0,
+              defeatFall: 0
+          }
+      };
+
+      // Weather and background systems
+      let weatherSystem;
+      let backgroundManager;
+      
+      // Debug function
+      function debug(message) {
+          const debugElement = document.getElementById('debugInfo');
+          debugElement.style.display = 'block';
+          debugElement.textContent = message;
+          console.log(message);
+      }
+      
+      // Initialize the game
+      window.onload = function() {
+          canvas = document.getElementById('gameCanvas');
+          ctx = canvas.getContext('2d');
+          
+          // Set canvas size
+          resizeCanvas();
+          window.addEventListener('resize', resizeCanvas);
+          
+          // Load sounds
+          loadSounds();
+          
+          // Set up sound control
+          setupSoundControl();
+          
+          // Initialize visual systems (weather and background)
+          initializeVisualSystems();
+          
+          // Set up visual controls
+          setupVisualControls();
+          
+          // Connect to server automatically
+          connectToServer();
+          
+          // Set up restart button with multiple event types
+          setupRestartButton();
+          
+          // Start game loop
+          lastTime = performance.now();
+          requestAnimationFrame(gameLoop);
+      };
+      
+      // Load all game sounds
+      function loadSounds() {
+          const soundFiles = {
+              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
+              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
+              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
+              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
+              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
+              button: '/Stickman-Fighter-v2/assets/button-press.mp3',
+              thunder: '/Stickman-Fighter-v2/assets/thunder.mp3'
+          };
+          
+          let loadedCount = 0;
+          const totalSounds = Object.keys(soundFiles).length;
+          
+          // Create audio objects for each sound
+          for (const [name, url] of Object.entries(soundFiles)) {
+              sounds[name] = new Audio();
+              sounds[name].src = url;
+              
+              // Handle loading
+              sounds[name].addEventListener('canplaythrough', () => {
+                  loadedCount++;
+                  if (loadedCount === totalSounds) {
+                      soundsLoaded = true;
+                      console.log('All sounds loaded');
+                  }
+              });
+              
+              // Handle errors
+              sounds[name].addEventListener('error', (e) => {
+                  console.error(`Error loading sound ${name}:`, e);
+              });
+              
+              // Preload the sound
+              sounds[name].load();
+          }
+      }
+      
+      // Play a sound with error handling
+      function playSound(name) {
+          if (!soundEnabled || !soundsLoaded) return;
+          
+          try {
+              // Create a clone to allow overlapping sounds
+              const sound = sounds[name].cloneNode();
+              sound.volume = 0.5; // Set volume to 50%
+              
+              // Play the sound with a promise and catch any errors
+              const playPromise = sound.play();
+              
+              if (playPromise !== undefined) {
+                  playPromise.catch(error => {
+                      console.warn(`Sound play error (${name}):`, error);
+                  });
+              }
+          } catch (error) {
+              console.error(`Error playing sound ${name}:`, error);
+          }
+      }
+      
+      // Set up sound control button
+      function setupSoundControl() {
+          const soundControl = document.getElementById('soundControl');
+          
+          soundControl.addEventListener('click', function() {
+              soundEnabled = !soundEnabled;
+              this.textContent = soundEnabled ? '🔊' : '🔇';
+              
+              // Play a sound to confirm it's working
+              if (soundEnabled) {
+                  playSound('button');
+              }
+          });
+      }
+      
+      function resizeCanvas() {
+          // Get the gameArea dimensions
+          const gameArea = document.getElementById('gameArea');
+          gameWidth = gameArea.clientWidth;
+          gameHeight = gameArea.clientHeight;
+          
+          canvas.width = gameWidth;
+          canvas.height = gameHeight;
+      }
+
+      // Initialize weather and background systems
+      function initializeVisualSystems() {
+          // Initialize weather system
+          weatherSystem = new WeatherSystem(canvas, ctx);
+          weatherSystem.init();
+
+          // Initialize background manager
+          backgroundManager = new BackgroundManager(canvas, ctx);
+          backgroundManager.init().then(() => {
+              console.log("Background manager ready");
+              
+              // Start with a random background
+              const backgrounds = ["dojo", "mountain", "city", "beach", "forest"];
+              const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+              backgroundManager.setBackground(randomBg, false);
+          });
+
+          // Make playSound function available to weather system
+          window.playSound = playSound;
+          window.soundEnabled = soundEnabled;
+      }
+
+      // Set up visual controls
+      function setupVisualControls() {
+          // Background buttons
+          document.querySelectorAll('.visual-control-btn[data-bg]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const bg = this.getAttribute('data-bg');
+                  if (backgroundManager) {
+                      backgroundManager.setBackground(bg);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-bg]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Weather buttons
+          document.querySelectorAll('.visual-control-btn[data-weather]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const weather = this.getAttribute('data-weather');
+                  if (weatherSystem) {
+                      weatherSystem.setWeather(weather);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-weather]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Time of day buttons
+          document.querySelectorAll('.visual-control-btn[data-time]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const time = this.getAttribute('data-time');
+                  if (backgroundManager) {
+                      backgroundManager.setTimeOfDay(time);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-time]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Background auto cycle toggle
+          const toggleBgCycleBtn = document.getElementById('toggleBgCycle');
+          toggleBgCycleBtn.addEventListener('click', function() {
+              if (backgroundManager) {
+                  if (backgroundManager.autoCycle) {
+                      backgroundManager.disableAutoCycle();
+                      this.textContent = 'BG: Off';
+                      this.classList.remove('active');
+                  } else {
+                      backgroundManager.enableAutoCycle(60000); // Change every 60 seconds
+                      this.textContent = 'BG: On';
+                      this.classList.add('active');
+                  }
+                  
+                  // Play button sound
+                  playSound('button');
+              }
+          });
+          
+          // Weather auto cycle toggle
+          const toggleWeatherCycleBtn = document.getElementById('toggleWeatherCycle');
+          toggleWeatherCycleBtn.addEventListener('click', function() {
+              if (weatherSystem) {
+                  if (weatherSystem.autoCycle) {
+                      weatherSystem.disableAutoCycle();
+                      this.textContent = 'Weather: Off';
+                      this.classList.remove('active');
+                  } else {
+                      weatherSystem.enableAutoCycle(30000); // Change every 30 seconds
+                      this.textContent = 'Weather: On';
+                      this.classList.add('active');
+                  }
+                  
+                  // Play button sound
+                  playSound('button');
+              }
+          });
+          
+          // Set initial active states
+          document.querySelector('.visual-control-btn[data-bg="dojo"]').classList.add('active');
+          document.querySelector('.visual-control-btn[data-weather="none"]').classList.add('active');
+          document.querySelector('.visual-control-btn[data-time="day"]').classList.add('active');
+      }
+      
+      function connectToServer() {
+          try {
+              // Connect to the hardcoded Glitch server
+              socket = io(GLITCH_SERVER_URL, {
+                  transports: ['websocket', 'polling'],
+                  reconnectionAttempts: 5
+              });
+              
+              socket.on('connect', function() {
+                  console.log('Connected to server');
+                  document.getElementById('waitingMessage').textContent = 'Waiting for another player to join...';
+              });
+              
+              socket.on('connect_error', function(error) {
+                  console.error('Connection error:', error);
+                  document.getElementById('waitingMessage').textContent = 'Connection error. Please try again.';
+                  // Try to reconnect after 3 seconds
+                  setTimeout(connectToServer, 3000);
+              });
+              
+              socket.on('playerId', function(id) {
+                  playerId = id;
+                  console.log('Your player ID:', playerId);
+                  
+                  // Show player indicator
+                  document.getElementById('playerIndicator').textContent = 
+                      id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
+                  
+                  // Set up controls for this player
+                  setupPlayerControls();
+              });
+              
+              socket.on('gameState', function(state) {
+                  // Track previous player states to detect changes for sound effects
+                  const prevPlayer1State = players.player1 ? players.player1.state : null;
+                  const prevPlayer2State = players.player2 ? players.player2.state : null;
+                  const prevPlayer1Power = players.player1 ? players.player1.power : MAX_POWER;
+                  const prevPlayer2Power = players.player2 ? players.player2.power : MAX_POWER;
+                  const wasGameStarted = gameStarted;
+                  
+                  // Store the previous winner
+                  const prevWinner = gameState.winner;
+                  
+                  // Update game state
+                  players = state.players;
+                  gameStarted = state.gameStarted;
+                  gameState = state;
+                  
+                  // Add isMoving property if it doesn't exist
+                  if (players.player1 && players.player1.isMoving === undefined) {
+                      players.player1.isMoving = false;
+                  }
+                  if (players.player2 && players.player2.isMoving === undefined) {
+                      players.player2.isMoving = false;
+                  }
+                  
+                  // Check if a player's health just reached zero
+                  const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
+                  const player2Defeated = prevPlayer2Power > 0 && players.player2.power <= 0;
+
+                  // If a player was just defeated, start the game ending sequence
+                  if ((player1Defeated || player2Defeated) && !gameEnding) {
+                      gameEnding = true;
+                      gameEndTime = performance.now();
+                      
+                      // Set victory/defeat animations immediately
+                      if (player1Defeated) {
+                          playerAnimations.player1.state = DEFEAT;
+                          playerAnimations.player2.state = VICTORY;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player2');
+                          winnerAnnounced = true;
+                      } else if (player2Defeated) {
+                          playerAnimations.player1.state = VICTORY;
+                          playerAnimations.player2.state = DEFEAT;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player1');
+                          winnerAnnounced = true;
+                      }
+                      
+                      // Play hurt sound for the defeated player
+                      if (player1Defeated) {
+                          playSound('hurt');
+                      } else if (player2Defeated) {
+                          playSound('hurt');
+                      }
+                      
+                      console.log("Game ending sequence started");
+                  }
+                  
+                  // Update animation states based on player states
+                  if (players.player1 && !gameEnding) {
+                      updateAnimationState('player1', players.player1.state, players.player1.isMoving);
+                  }
+                  if (players.player2 && !gameEnding) {
+                      updateAnimationState('player2', players.player2.state, players.player2.isMoving);
+                  }
+                  
+                  // Play game start sound when game begins
+                  if (gameStarted && !wasGameStarted) {
+                      playSound('gameStart');
+                  }
+                  
+                  // Play sounds based on state changes
+                  if (players.player1 && prevPlayer1State !== players.player1.state && !gameEnding) {
+                      if (players.player1.state === HITTING) playSound('hit');
+                      if (players.player1.state === KICKING) playSound('kick');
+                      if (players.player1.state === HURT) playSound('hurt');
+                  }
+                  
+                  if (players.player2 && prevPlayer2State !== players.player2.state && !gameEnding) {
+                      if (players.player2.state === HITTING) playSound('hit');
+                      if (players.player2.state === KICKING) playSound('kick');
+                      if (players.player2.state === HURT) playSound('hurt');
+                  }
+                  
+                  // Show/hide waiting message
+                  document.getElementById('waitingMessage').style.display = 
+                      gameStarted ? 'none' : 'block';
+                  
+                  // Check for winner
+                  if (state.winner && !prevWinner) {
+                      // Winner was just determined
+                      console.log(`Winner determined: ${state.winner}`);
+                      
+                      // Start the game ending sequence if it hasn't already started
+                      if (!gameEnding) {
+                          gameEnding = true;
+                          gameEndTime = performance.now();
+                          
+                          // Set victory/defeat animations immediately
+                          if (state.winner === 'player1') {
+                              playerAnimations.player1.state = VICTORY;
+                              playerAnimations.player2.state = DEFEAT;
+                          } else {
+                              playerAnimations.player1.state = DEFEAT;
+                              playerAnimations.player2.state = VICTORY;
+                          }
+                          
+                          // Play victory sound
+                          playSound('victory');
+                      }
+                  } else if (state.winner === null && prevWinner) {
+                      // Game has been reset
+                      resetGameState();
+                  }
+              });
+              
+              // Listen for player ready status updates
+              socket.on('playerReady', function(players) {
+                  readyPlayers = players;
+                  updateReadyStatus();
+                  
+                  debug("Ready players: " + JSON.stringify(readyPlayers));
+                  
+                  // If this player is ready, update button state
+                  if (readyPlayers.includes(playerId)) {
+                      const restartBtn = document.getElementById('restartBtn');
+                      restartBtn.textContent = 'Waiting for other player...';
+                      restartBtn.disabled = true;
+                  }
+                  
+                  // Play button sound when a player gets ready
+                  playSound('button');
+                  
+                  // Check if both players are ready
+                  if (readyPlayers.includes('player1') && readyPlayers.includes('player2')) {
+                      debug("Both players ready, restarting game");
+                      
+                      // Hide winner message
+                      document.getElementById('winnerMessage').style.display = 'none';
+                      
+                      // Reset game state locally
+                      resetGameState();
+                      
+                      // Tell the server to restart the game
+                      socket.emit('restartGame');
+                  }
+              });
+
+              // Add a new socket event handler for game restart confirmation
+              socket.on('gameRestarted', function() {
+                  debug("Game has been restarted by server");
+                  
+                  // Hide winner message if it's still showing
+                  document.getElementById('winnerMessage').style.display = 'none';
+                  
+                  // Reset game state
+                  resetGameState();
+                  
+                  // Play game start sound
+                  playSound('gameStart');
+              });
+          } catch (error) {
+              console.error('Error connecting to server:', error);
+              document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
+              // Try to reconnect after 3 seconds
+              setTimeout(connectToServer, 3000);
+          }
+      }
+      
+      // Reset game state when a new game starts
+      function resetGameState() {
+          console.log("Resetting game state");
+          
+          // Hide winner message
+          document.getElementById('winnerMessage').style.display = 'none';
+          
+          // Reset button state
+          const restartBtn = document.getElementById('restartBtn');
+          restartBtn.textContent = 'Play Again';
+          restartBtn.disabled = false;
+          
+          // Reset player status indicators
+          document.getElementById('player1Status').className = 'status-indicator status-waiting';
+          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+          document.getElementById('player2Status').className = 'status-indicator status-waiting';
+          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+          
+          // Clear ready players array
+          readyPlayers = [];
+          
+          // Reset animation states
+          playerAnimations.player1.state = IDLE;
+          playerAnimations.player2.state = IDLE;
+          
+          // Reset game ending flags
+          gameEnding = false;
+          gameEndTime = 0;
+          winnerAnnounced = false;
+          
+          // Reset hit feedback
+          hitFeedback.active = false;
+      }
+      
+      // Update animation state based on player state
+      function updateAnimationState(playerId, state, isMoving) {
+          const anim = playerAnimations[playerId];
+          
+          // Don't update if we're in the game ending sequence
+          if (gameEnding) return;
+          
+          // Only update if state changed
+          if (anim.state !== state) {
+              anim.frame = 0; // Reset animation frame on state change
+              
+              // Reset specific animation variables
+              if (state === HURT) {
+                  anim.hurtAngle = 0;
+                  anim.hurtDirection = playerId === 'player1' ? 1 : -1;
+              }
+          }
+          
+          // Set the animation state
+          anim.state = state;
+          
+          // Handle walking state
+          if (isMoving && state === IDLE) {
+              anim.state = WALKING;
+          }
+      }
+      
+      function updateReadyStatus() {
+          // Update player 1 status
+          const player1Status = document.getElementById('player1Status');
+          if (readyPlayers.includes('player1')) {
+              player1Status.className = 'status-indicator status-ready';
+              player1Status.textContent = 'Player 1: Ready';
+          } else {
+              player1Status.className = 'status-indicator status-waiting';
+              player1Status.textContent = 'Player 1: Waiting';
+          }
+          
+          // Update player 2 status
+          const player2Status = document.getElementById('player2Status');
+          if (readyPlayers.includes('player2')) {
+              player2Status.className = 'status-indicator status-ready';
+              player2Status.textContent = 'Player 2: Ready';
+          } else {
+              player2Status.className = 'status-indicator status-waiting';
+              player2Status.textContent = 'Player 2: Waiting';
+          }
+      }
+      
+      function setupPlayerControls() {
+          const controlsContainer = document.getElementById('controlsContainer');
+          
+          // Clear any existing controls
+          controlsContainer.innerHTML = '';
+          
+          // Create new control container
+          const playerControls = document.createElement('div');
+          playerControls.className = 'player-controls';
+          playerControls.innerHTML = `
+              <button class="control-btn move-btn" id="moveLeft">←</button>
+              <button class="control-btn move-btn" id="moveRight">→</button>
+              <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+              <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+          `;
+          
+          controlsContainer.appendChild(playerControls);
+          
+          // Setup touch event listeners
+          setupControlEventListeners();
+      }
+      
+      function setupControlEventListeners() {
+          // Get all control buttons
+          const moveLeftBtn = document.getElementById('moveLeft');
+          const moveRightBtn = document.getElementById('moveRight');
+          const hitBtn = document.getElementById('hitBtn');
+          const kickBtn = document.getElementById('kickBtn');
+          
+          // Clear any existing event listeners (just in case)
+          moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
+          moveRightBtn.replaceWith(moveRightBtn.cloneNode(true));
+          hitBtn.replaceWith(hitBtn.cloneNode(true));
+          kickBtn.replaceWith(kickBtn.cloneNode(true));
+          
+          // Get the fresh elements
+          const newMoveLeftBtn = document.getElementById('moveLeft');
+          const newMoveRightBtn = document.getElementById('moveRight');
+          const newHitBtn = document.getElementById('hitBtn');
+          const newKickBtn = document.getElementById('kickBtn');
+          
+          // Add touch start event listeners
+          newMoveLeftBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
+          });
+          
+          newMoveRightBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
+          });
+          
+          newHitBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+          });
+          
+          newKickBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+          });
+          
+          // Add touch end event listeners
+          newMoveLeftBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newMoveRightBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newHitBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
+          
+          newKickBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
+          
+          // For mouse users (testing)
+          newMoveLeftBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
+          });
+          
+          newMoveRightBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
+          });
+          
+          newHitBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+          });
+          
+          newKickBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+          });
+          
+          newMoveLeftBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newMoveRightBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newHitBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+          });
+          
+          newKickBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+          });
+          
+          // Setup keyboard controls
+          setupKeyboardControls();
+      }
+      
+      function setupKeyboardControls() {
+          // Remove any existing event listeners
+          window.removeEventListener('keydown', handleKeyDown);
+          
+          window.removeEventListener('keyup', handleKeyUp);
+          
+          // Add event listeners
+          window.addEventListener('keydown', handleKeyDown);
+          window.addEventListener('keyup', handleKeyUp);
+      }
+      
+      function handleKeyDown(e) {
+          if (!socket || !playerId || gameEnding) return;
+          
+          let buttonId = null;
+          let command = null;
+          
+          // Player 1 controls
+          if (playerId === 'player1') {
+              if (e.key === 'a') {
+                  buttonId = 'moveLeft';
+                  command = {type: 'move', data: {direction: 'left'}};
+              }
+              else if (e.key === 'd') {
+                  buttonId = 'moveRight';
+                  command = {type: 'move', data: {direction: 'right'}};
+              }
+              else if (e.key === 'q') {
+                  buttonId = 'hitBtn';
+                  command = {type: 'attack', data: {type: 'hit'}};
+              }
+              else if (e.key === 'e') {
+                  buttonId = 'kickBtn';
+                  command = {type: 'attack', data: {type: 'kick'}};
+              }
+          }
+          // Player 2 controls
+          else if (playerId === 'player2') {
+              if (e.key === 'ArrowLeft') {
+                  buttonId = 'moveLeft';
+                  command = {type: 'move', data: {direction: 'left'}};
+              }
+              else if (e.key === 'ArrowRight') {
+                  buttonId = 'moveRight';
+                  command = {type: 'move', data: {direction: 'right'}};
+              }
+              else if (e.key === ',') {
+                  buttonId = 'hitBtn';
+                  command = {type: 'attack', data: {type: 'hit'}};
+              }
+              else if (e.key === '.') {
+                  buttonId = 'kickBtn';
+                  command = {type: 'attack', data: {type: 'kick'}};
+              }
+          }
+          
+          // Add active class to the button
+          if (buttonId) {
+              const button = document.getElementById(buttonId);
+              if (button && !button.classList.contains('active')) {
+                  button.classList.add('active');
+              }
+              
+              // Send command to server
+              if (command) {
+                  if (command.type === 'move') {
+                      socket.emit('move', command.data);
+                  } else if (command.type === 'attack') {
+                      socket.emit('attack', command.data);
+                  }
+              }
+          }
+      }
+      
+      function handleKeyUp(e) {
+          if (!socket || !playerId) return;
+          
+          let buttonId = null;
+          let shouldStopMove = false;
+          
+          // Player 1 controls
+          if (playerId === 'player1') {
+              if (e.key === 'a') {
+                  buttonId = 'moveLeft';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'd') {
+                  buttonId = 'moveRight';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'q') {
+                  buttonId = 'hitBtn';
+              }
+              else if (e.key === 'e') {
+                  buttonId = 'kickBtn';
+              }
+          }
+          // Player 2 controls
+          else if (playerId === 'player2') {
+              if (e.key === 'ArrowLeft') {
+                  buttonId = 'moveLeft';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'ArrowRight') {
+                  buttonId = 'moveRight';
+                  shouldStopMove = true;
+              }
+              else if (e.key === ',') {
+                  buttonId = 'hitBtn';
+              }
+              else if (e.key === '.') {
+                  buttonId = 'kickBtn';
+              }
+          }
+          
+          // Remove active class from the button
+          if (buttonId) {
+              const button = document.getElementById(buttonId);
+              if (button) {
+                  button.classList.remove('active');
+              }
+              
+              // Stop movement if needed
+              if (shouldStopMove && !gameEnding) {
+                  socket.emit('stopMove');
+              }
+          }
+      }
+      
+      function setupRestartButton() {
+          const restartBtn = document.getElementById('restartBtn');
+          
+          // Add event handler for restart button
+          restartBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              if (socket && playerId) {
+                  // Play button sound
+                  playSound('button');
+                  
+                  // Send player ready status to server
+                  socket.emit('playerReady', playerId);
+                  
+                  // Update button state
+                  this.textContent = 'Waiting for other player...';
+                  this.disabled = true;
+                  
+                  debug("Sent playerReady: " + playerId);
+              }
+          });
+      }
+      
+      function gameLoop(timestamp) {
+          // Calculate delta time for smooth animations
+          const deltaTime = timestamp - lastTime;
+          lastTime = timestamp;
+          
+          // Update animation frame
+          animationFrame += ANIMATION_SPEED * (deltaTime / 16.67); // Normalize to ~60fps
+          
+          // Update player animations
+          updatePlayerAnimations(deltaTime);
+
+          // Update background manager with player positions
+          if (backgroundManager) {
+              backgroundManager.update(deltaTime);
+          }
+
+          // Update weather system
+          if (weatherSystem) {
+              weatherSystem.update(deltaTime);
+          }
+
+          // Update hit detection (only if game is active and not ending)
+          if (gameStarted && !gameEnding) {
+              checkHits();
+          }
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, gameWidth, gameHeight);
+          
+          // Draw game elements
+          if (backgroundManager) {
+              backgroundManager.draw(players);
+          } else {
+              // Fallback to original background if manager not ready
+              drawBackground();
+          }
+
+          // Always draw players, even if game is not started
+          if (players.player1 && players.player2) {
+              drawPlayers();
+          }
+
+          // Draw hit feedback and power bars if game is active or ending
+          if (gameStarted || gameEnding) {
+              drawHitFeedback();
+              drawPowerBars();
+              // drawHitboxes(); // Uncomment for debugging
+          }
+
+          // Draw weather effects on top of everything
+          if (weatherSystem) {
+              weatherSystem.draw();
+          }
+          
+          // Continue the game loop
+          requestAnimationFrame(gameLoop);
+      }
+      
+      // Update player animations
+      function updatePlayerAnimations(deltaTime) {
+          // Update player 1 animations
+          updatePlayerAnimation('player1', deltaTime);
+          
+          // Update player 2 animations
+          updatePlayerAnimation('player2', deltaTime);
+      }
+      
+      // Update individual player animation
+      function updatePlayerAnimation(playerId, deltaTime) {
+          const anim = playerAnimations[playerId];
+          
+          // Update breathing animation for idle
+          if (anim.state === IDLE) {
+              anim.breatheOffset += anim.breatheDirection * 0.02 * (deltaTime / 16.67);
+              
+              // Reverse direction at limits
+              if (anim.breatheOffset > 1) {
+                  anim.breatheOffset = 1;
+                  anim.breatheDirection = -1;
+              } else if (anim.breatheOffset < -1) {
+                  anim.breatheOffset = -1;
+                  anim.breatheDirection = 1;
+              }
+          }
+          
+          // Update walking animation
+          if (anim.state === WALKING) {
+              anim.walkCycle += 0.1 * (deltaTime / 16.67);
+              if (anim.walkCycle > Math.PI * 2) {
+                  anim.walkCycle -= Math.PI * 2;
+              }
+          }
+          
+          // Update hurt animation
+          if (anim.state === HURT) {
+              anim.hurtAngle += anim.hurtDirection * 0.2 * (deltaTime / 16.67);
+              
+              // Limit the hurt angle
+              if (Math.abs(anim.hurtAngle) > Math.PI / 6) {
+                  anim.hurtDirection *= -0.7; // Bounce back with damping
+              }
+          }
+          
+          // Update victory animation
+          if (anim.state === VICTORY) {
+              anim.victoryJump += 0.1 * (deltaTime / 16.67);
+              if (anim.victoryJump > Math.PI * 2) {
+                  anim.victoryJump -= Math.PI * 2;
+              }
+          }
+          
+          // Update defeat animation
+          if (anim.state === DEFEAT) {
+              if (anim.defeatFall < 1) {
+                  anim.defeatFall += 0.02 * (deltaTime / 16.67);
+                  if (anim.defeatFall > 1) anim.defeatFall = 1;
+              }
+          }
+      }
+
+      // Calculate hitboxes for a player
+      function calculateHitboxes(playerId) {
+          if (!players[playerId]) return null;
+          
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          const facingLeft = playerId === 'player2'; // Player 2 faces left
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          // Calculate center point
+          const centerX = screenX + PLAYER_WIDTH / 2;
+          const headY = screenY + 10 + anim.breatheOffset + yOffset;
+          
+          // Calculate attack point (where hits land)
+          let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
+          let attackY = screenY + 25 + yOffset;
+          let attackRange = 10; // Default attack range
+
+          if (anim.state === HITTING) {
+              attackRange = 10;
+          } else if (anim.state === KICKING) {
+              // Extend kick range and adjust position
+              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH - 10 : LEG_HITBOX_WIDTH + 10);
+              attackY = screenY + 60 + yOffset;
+              attackRange = 15; // Larger range for kicks
+          }
+          
+          return {
+              id: playerId,
+              head: {
+                  x: centerX,
+                  y: headY,
+                  radius: HEAD_HITBOX_RADIUS
+              },
+              body: {
+                  x: centerX,
+                  y: screenY + 35 + yOffset,
+                  width: BODY_HITBOX_WIDTH,
+                  height: BODY_HITBOX_HEIGHT
+              },
+              attackPoint: {
+                  x: attackX,
+                  y: attackY,
+                  active: anim.state === HITTING || anim.state === KICKING,
+                  type: anim.state === HITTING ? 'hit' : 'kick',
+                  range: attackRange
+              }
+          };
+      }
+
+      // Check for hits between players
+      function checkHits() {
+          if (!gameStarted || !players.player1 || !players.player2 || gameEnding) return;
+          
+          // Don't check hits too frequently
+          const now = performance.now();
+          if (now - lastHitTime < HIT_COOLDOWN) return;
+          
+          // Calculate hitboxes
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          // Check player 1 attacking player 2
+          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT) {
+              const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
+              if (hit) {
+                  applyHit('player1', 'player2', p1Hitbox.attackPoint, hit);
+              }
+          }
+          
+          // Check player 2 attacking player 1
+          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT) {
+              const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
+              if (hit) {
+                  applyHit('player2', 'player1', p2Hitbox.attackPoint, hit);
+              }
+          }
+      }
+
+      // Detect if an attack point hits a hitbox
+      function detectHit(attackPoint, targetHitbox) {
+          // Get attack range (or default to 10)
+          const range = attackPoint.range || 10;
+          
+          // Check head hit (circular collision)
+          const dx = attackPoint.x - targetHitbox.head.x;
+          const dy = attackPoint.y - targetHitbox.head.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < targetHitbox.head.radius + range) {
+              return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
+          }
+          
+          // Check body hit (rectangular collision with expanded range)
+          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2 - range;
+          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2 + range;
+          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2 - range;
+          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2 + range;
+          
+          if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
+              attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
+              return { zone: 'body', point: { x: attackPoint.x, y: attackPoint.y } };
+          }
+          
+          return null;
+      }
+
+      // Apply hit effects
+      function applyHit(attackerId, targetId, attackPoint, hit) {
+          // Don't register hits if the game is over
+          if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
+          
+          lastHitTime = performance.now();
+          
+          // Calculate damage based on attack type and hit zone
+          let damage = attackPoint.type === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
+          
+          // Critical hit for headshots
+          if (hit.zone === 'head') {
+              damage *= CRITICAL_HIT_MULTIPLIER;
+          }
+          
+          // Send attack to server
+          if (socket) {
+              socket.emit('registerHit', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  damage: damage,
+                  hitZone: hit.zone
+              });
+          }
+          
+          // Show hit feedback
+          hitFeedback = {
+              active: true,
+              x: hit.point.x,
+              y: hit.point.y,
+              type: hit.zone === 'head' ? 'critical' : 'normal',
+              time: performance.now()
+          };
+      }
+
+      // Draw hit feedback
+      function drawHitFeedback() {
+          if (!hitFeedback.active) return;
+          
+          const now = performance.now();
+          const elapsed = now - hitFeedback.time;
+          
+          if (elapsed > HIT_FEEDBACK_DURATION) {
+              hitFeedback.active = false;
+              return;
+          }
+          
+          // Calculate animation progress (0 to 1)
+          const progress = elapsed / HIT_FEEDBACK_DURATION;
+          const size = 20 + progress * 30;
+          const opacity = 1 - progress;
+          
+          ctx.save();
+          
+          // Draw hit effect
+          if (hitFeedback.type === 'critical') {
+              // Critical hit effect (red burst)
+              ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+          } else {
+              // Normal hit effect (white burst)
+              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+              ctx.strokeStyle = `rgba(200, 200, 200, ${opacity})`;
+          }
+          
+          // Draw burst
+          ctx.beginPath();
+          ctx.arc(hitFeedback.x, hitFeedback.y, size / 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw impact lines
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 8; i++) {
+              const angle = Math.PI * 2 * i / 8;
+              const innerRadius = size / 2;
+              const outerRadius = size;
+              
+              ctx.beginPath();
+              ctx.moveTo(
+                  hitFeedback.x + Math.cos(angle) * innerRadius,
+                  hitFeedback.y + Math.sin(angle) * innerRadius
+              );
+              ctx.lineTo(
+                  hitFeedback.x + Math.cos(angle) * outerRadius,
+                  hitFeedback.y + Math.sin(angle) * outerRadius
+              );
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw power bars
+      function drawPowerBars() {
+          if (!players.player1 || !players.player2) return;
+          
+          const barWidth = Math.min(300, gameWidth * 0.4);
+          const barHeight = 20;
+          const margin = 10;
+          
+          ctx.save();
+          
+          // Player 1 power bar (left side)
+          const p1Power = players.player1.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(margin, margin, barWidth, barHeight);
+          
+          // Bar fill
+          ctx.fillStyle = p1Power > 0.3 ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 50, 50, 0.4)';
+          ctx.fillRect(margin, margin, barWidth * p1Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(margin, margin, barWidth, barHeight);
+          
+          // Player 2 power bar (right side)
+          const p2Power = players.player2.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          // Bar fill (right-aligned)
+          ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
+          ctx.fillRect(gameWidth - margin - barWidth * p2Power, margin, barWidth * p2Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          ctx.restore();
+      }
+
+      // Draw players
+      function drawPlayers() {
+          if (!players.player1 || !players.player2) return;
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Draw player 1 (red)
+          drawPlayer('player1', scaleFactor, floorY);
+          
+          // Draw player 2 (blue)
+          drawPlayer('player2', scaleFactor, floorY);
+      }
+
+      // Draw a single player
+      function drawPlayer(playerId, scaleFactor, floorY) {
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Set player color
+          const playerColor = playerId === 'player1' ? '#ff5555' : '#5555ff';
+          const outlineColor = playerId === 'player1' ? '#aa0000' : '#0000aa';
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === IDLE) {
+              yOffset = anim.breatheOffset;
+          } else if (anim.state === WALKING) {
+              yOffset = Math.sin(anim.walkCycle) * 3;
+          } else if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          ctx.save();
+          
+          // Apply hurt animation rotation
+          if (anim.state === HURT) {
+              const centerX = screenX + PLAYER_WIDTH / 2;
+              const centerY = screenY + PLAYER_HEIGHT / 2;
+              
+              ctx.translate(centerX, centerY);
+              ctx.rotate(anim.hurtAngle);
+              ctx.translate(-centerX, -centerY);
+          }
+          
+          // Draw stick figure
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = outlineColor;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + 15 + yOffset, 10, 0, Math.PI * 2);
+          ctx.fillStyle = playerColor;
+          ctx.fill();
+          ctx.stroke();
+          
+          // Body
+          ctx.beginPath();
+          ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 25 + yOffset);
+          ctx.lineTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+          ctx.stroke();
+          
+          // Draw arms based on animation state
+          if (anim.state === HITTING) {
+              // Hitting animation - extend one arm
+              const punchExtension = 10;
+              const facingLeft = playerId === 'player2';
+              
+              // Back arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Punching arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 - punchExtension : 25 + punchExtension),
+                  screenY + 30 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === KICKING) {
+              // Kicking animation - extend one leg
+              const kickExtension = 15;
+              const facingLeft = playerId === 'player2';
+              
+              // Arms in ready position
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Standing leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 5 : -5),
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              // Kicking leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 - kickExtension : 30 + kickExtension),
+                  screenY + 60 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === VICTORY) {
+              // Victory animation - arms up
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === DEFEAT) {
+              // Defeat animation - slumped over
+              
+              // Arms hanging down
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              // Legs crumpled
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 75 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 75 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === WALKING) {
+              // Walking animation
+              const walkOffset = Math.sin(anim.walkCycle);
+              const facingLeft = playerId === 'player2';
+              
+              // Arms swinging
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15) + walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15) - walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Legs walking
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 - walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+          } else {
+              // Default idle pose
+              
+              // Arms
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw background (fallback if background manager is not ready)
+      function drawBackground() {
+          // Simple gradient background
+          const gradient = ctx.createLinearGradient(0, 0, 0, gameHeight);
+          gradient.addColorStop(0, '#4a6a8a');
+          gradient.addColorStop(1, '#2a3a4a');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, gameWidth, gameHeight);
+          
+          // Draw floor
+          ctx.fillStyle = '#554433';
+          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
+      }
+
+      // Show winner message
+      function showWinner(winnerId) {
+          const winnerMessage = document.getElementById('winnerMessage');
+          const winnerText = document.getElementById('winnerText');
+          
+          // Set winner text
+          winnerText.textContent = `${winnerId === 'player1' ? 'Player 1' : 'Player 2'} Wins!`;
+          
+          // Show the message
+          winnerMessage.style.display = 'block';
+          
+          // Reset ready status
+          updateReadyStatus();
+          
+          // Play victory sound
+          playSound('victory');
+      }
+
+      // Draw hitboxes for debugging
+      function drawHitboxes() {
+          if (!players.player1 || !players.player2) return;
+          
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          ctx.save();
+          
+          // Draw player 1 hitboxes
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = 2;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p1Hitbox.body.x - p1Hitbox.body.width / 2,
+              p1Hitbox.body.y - p1Hitbox.body.height / 2,
+              p1Hitbox.body.width,
+              p1Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p1Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // Draw player 2 hitboxes
+          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p2Hitbox.body.x - p2Hitbox.body.width / 2,
+              p2Hitbox.body.y - p2Hitbox.body.height / 2,
+              p2Hitbox.body.width,
+              p2Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p2Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+  </script>
 </body>
 </html>
