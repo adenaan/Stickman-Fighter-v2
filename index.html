@@ -295,6 +295,9 @@
       let gameStarted = false;
       let readyPlayers = []; // Track which players are ready
       let gameState = {};
+      let gameEnding = false; // Flag to track if the game is in the ending sequence
+      let gameEndTime = 0; // Time when the game ended
+      let winnerAnnounced = false; // Flag to track if the winner has been announced
 
       // Hit detection variables
       let lastHitTime = 0;
@@ -322,6 +325,7 @@
       const KICK_DAMAGE = 15;
       const HIT_RANGE = 40;
       const KICK_RANGE = 50;
+      const GAME_END_DELAY = 1500; // Delay before showing winner message (ms)
 
       // Hit detection constants
       const HEAD_HITBOX_RADIUS = 10;
@@ -379,7 +383,6 @@
           debugElement.style.display = 'block';
           debugElement.textContent = message;
           console.log(message);
-      
       }
       
       // Initialize the game
@@ -411,12 +414,12 @@
       // Load all game sounds
       function loadSounds() {
           const soundFiles = {
-              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
-              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
-              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              hit: '/sounds/hit.mp3',
+              kick: '/sounds/kick.mp3',
+              hurt: '/sounds/hurt.mp3',
+              victory: '/sounds/victory.mp3',
+              gameStart: '/sounds/game-start.mp3',
+              button: '/sounds/button-click.mp3'
           };
           
           let loadedCount = 0;
@@ -529,8 +532,14 @@
                   // Track previous player states to detect changes for sound effects
                   const prevPlayer1State = players.player1 ? players.player1.state : null;
                   const prevPlayer2State = players.player2 ? players.player2.state : null;
+                  const prevPlayer1Power = players.player1 ? players.player1.power : MAX_POWER;
+                  const prevPlayer2Power = players.player2 ? players.player2.power : MAX_POWER;
                   const wasGameStarted = gameStarted;
                   
+                  // Store the previous winner
+                  const prevWinner = gameState.winner;
+                  
+                  // Update game state
                   players = state.players;
                   gameStarted = state.gameStarted;
                   gameState = state;
@@ -543,11 +552,39 @@
                       players.player2.isMoving = false;
                   }
                   
+                  // Check if a player's health just reached zero
+                  const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
+                  const player2Defeated = prevPlayer2Power > 0 && players.player2.power <= 0;
+                  
+                  // If a player was just defeated, start the game ending sequence
+                  if ((player1Defeated || player2Defeated) && !gameEnding) {
+                      gameEnding = true;
+                      gameEndTime = performance.now();
+                      
+                      // Set victory/defeat animations immediately
+                      if (player1Defeated) {
+                          playerAnimations.player1.state = DEFEAT;
+                          playerAnimations.player2.state = VICTORY;
+                      } else if (player2Defeated) {
+                          playerAnimations.player1.state = VICTORY;
+                          playerAnimations.player2.state = DEFEAT;
+                      }
+                      
+                      // Play hurt sound for the defeated player
+                      if (player1Defeated) {
+                          playSound('hurt');
+                      } else if (player2Defeated) {
+                          playSound('hurt');
+                      }
+                      
+                      console.log("Game ending sequence started");
+                  }
+                  
                   // Update animation states based on player states
-                  if (players.player1) {
+                  if (players.player1 && !gameEnding) {
                       updateAnimationState('player1', players.player1.state, players.player1.isMoving);
                   }
-                  if (players.player2) {
+                  if (players.player2 && !gameEnding) {
                       updateAnimationState('player2', players.player2.state, players.player2.isMoving);
                   }
                   
@@ -557,13 +594,13 @@
                   }
                   
                   // Play sounds based on state changes
-                  if (players.player1 && prevPlayer1State !== players.player1.state) {
+                  if (players.player1 && prevPlayer1State !== players.player1.state && !gameEnding) {
                       if (players.player1.state === HITTING) playSound('hit');
                       if (players.player1.state === KICKING) playSound('kick');
                       if (players.player1.state === HURT) playSound('hurt');
                   }
                   
-                  if (players.player2 && prevPlayer2State !== players.player2.state) {
+                  if (players.player2 && prevPlayer2State !== players.player2.state && !gameEnding) {
                       if (players.player2.state === HITTING) playSound('hit');
                       if (players.player2.state === KICKING) playSound('kick');
                       if (players.player2.state === HURT) playSound('hurt');
@@ -574,40 +611,13 @@
                       gameStarted ? 'none' : 'block';
                   
                   // Check for winner
-                  if (state.winner) {
-                      showWinner(state.winner);
-                      
-                      // Set victory/defeat animations
-                      if (state.winner === 'player1') {
-                          playerAnimations.player1.state = VICTORY;
-                          playerAnimations.player2.state = DEFEAT;
-                      } else {
-                          playerAnimations.player2.state = VICTORY;
-                          playerAnimations.player1.state = DEFEAT;
-                      }
-                      
-                      playSound('victory');
-                  } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
-                      // Game has been reset, hide winner message
-                      document.getElementById('winnerMessage').style.display = 'none';
-                      
-                      // Reset button state
-                      const restartBtn = document.getElementById('restartBtn');
-                      restartBtn.textContent = 'Play Again';
-                      restartBtn.disabled = false;
-                      
-                      // Reset player status indicators
-                      document.getElementById('player1Status').className = 'status-indicator status-waiting';
-                      document.getElementById('player1Status').textContent = 'Player 1: Waiting';
-                      document.getElementById('player2Status').className = 'status-indicator status-waiting';
-                      document.getElementById('player2Status').textContent = 'Player 2: Waiting';
-                      
-                      // Clear ready players array
-                      readyPlayers = [];
-                      
-                      // Reset animation states
-                      playerAnimations.player1.state = IDLE;
-                      playerAnimations.player2.state = IDLE;
+                  if (state.winner && !prevWinner) {
+                      // Winner was just determined, but we'll delay showing the message
+                      // The actual display will be handled in the game loop
+                      console.log(`Winner determined: ${state.winner}`);
+                  } else if (state.winner === null && prevWinner) {
+                      // Game has been reset
+                      resetGameState();
                   }
               });
               
@@ -636,9 +646,46 @@
           }
       }
       
+      // Reset game state when a new game starts
+      function resetGameState() {
+          console.log("Resetting game state");
+          
+          // Hide winner message
+          document.getElementById('winnerMessage').style.display = 'none';
+          
+          // Reset button state
+          const restartBtn = document.getElementById('restartBtn');
+          restartBtn.textContent = 'Play Again';
+          restartBtn.disabled = false;
+          
+          // Reset player status indicators
+          document.getElementById('player1Status').className = 'status-indicator status-waiting';
+          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+          document.getElementById('player2Status').className = 'status-indicator status-waiting';
+          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+          
+          // Clear ready players array
+          readyPlayers = [];
+          
+          // Reset animation states
+          playerAnimations.player1.state = IDLE;
+          playerAnimations.player2.state = IDLE;
+          
+          // Reset game ending flags
+          gameEnding = false;
+          gameEndTime = 0;
+          winnerAnnounced = false;
+          
+          // Reset hit feedback
+          hitFeedback.active = false;
+      }
+      
       // Update animation state based on player state
       function updateAnimationState(playerId, state, isMoving) {
           const anim = playerAnimations[playerId];
+          
+          // Don't update if we're in the game ending sequence
+          if (gameEnding) return;
           
           // Only update if state changed
           if (anim.state !== state) {
@@ -727,38 +774,38 @@
           newMoveLeftBtn.addEventListener('touchstart', function(e) {
               e.preventDefault();
               this.classList.add('active');
-              if (socket) socket.emit('move', {direction: 'left'});
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
           });
           
           newMoveRightBtn.addEventListener('touchstart', function(e) {
               e.preventDefault();
               this.classList.add('active');
-              if (socket) socket.emit('move', {direction: 'right'});
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
           });
           
           newHitBtn.addEventListener('touchstart', function(e) {
               e.preventDefault();
               this.classList.add('active');
-              if (socket) socket.emit('attack', {type: 'hit'});
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
           });
           
           newKickBtn.addEventListener('touchstart', function(e) {
               e.preventDefault();
               this.classList.add('active');
-              if (socket) socket.emit('attack', {type: 'kick'});
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
           // Add touch end event listeners
           newMoveLeftBtn.addEventListener('touchend', function(e) {
               e.preventDefault();
               this.classList.remove('active');
-              if (socket) socket.emit('stopMove');
+              if (socket && !gameEnding) socket.emit('stopMove');
           });
           
           newMoveRightBtn.addEventListener('touchend', function(e) {
               e.preventDefault();
               this.classList.remove('active');
-              if (socket) socket.emit('stopMove');
+              if (socket && !gameEnding) socket.emit('stopMove');
           });
           
           newHitBtn.addEventListener('touchend', function(e) {
@@ -774,32 +821,32 @@
           // For mouse users (testing)
           newMoveLeftBtn.addEventListener('mousedown', function(e) {
               this.classList.add('active');
-              if (socket) socket.emit('move', {direction: 'left'});
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
           });
           
           newMoveRightBtn.addEventListener('mousedown', function(e) {
               this.classList.add('active');
-              if (socket) socket.emit('move', {direction: 'right'});
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
           });
           
           newHitBtn.addEventListener('mousedown', function(e) {
               this.classList.add('active');
-              if (socket) socket.emit('attack', {type: 'hit'});
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
           });
           
           newKickBtn.addEventListener('mousedown', function(e) {
               this.classList.add('active');
-              if (socket) socket.emit('attack', {type: 'kick'});
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
           newMoveLeftBtn.addEventListener('mouseup', function(e) {
               this.classList.remove('active');
-              if (socket) socket.emit('stopMove');
+              if (socket && !gameEnding) socket.emit('stopMove');
           });
           
           newMoveRightBtn.addEventListener('mouseup', function(e) {
               this.classList.remove('active');
-              if (socket) socket.emit('stopMove');
+              if (socket && !gameEnding) socket.emit('stopMove');
           });
           
           newHitBtn.addEventListener('mouseup', function(e) {
@@ -825,7 +872,7 @@
       }
       
       function handleKeyDown(e) {
-          if (!socket || !playerId) return;
+          if (!socket || !playerId || gameEnding) return;
           
           let buttonId = null;
           let command = null;
@@ -936,7 +983,7 @@
               }
               
               // Stop movement if needed
-              if (shouldStopMove) {
+              if (shouldStopMove && !gameEnding) {
                   socket.emit('stopMove');
               }
           }
@@ -977,8 +1024,20 @@
           // Update player animations
           updatePlayerAnimations(deltaTime);
 
-          // Update hit detection
-          checkHits();
+          // Check for game ending sequence
+          if (gameEnding && gameState.winner && !winnerAnnounced) {
+              const now = performance.now();
+              if (now - gameEndTime >= GAME_END_DELAY) {
+                  // Show winner message after delay
+                  showWinner(gameState.winner);
+                  winnerAnnounced = true;
+              }
+          }
+
+          // Update hit detection (only if game is active and not ending)
+          if (gameStarted && !gameEnding) {
+              checkHits();
+          }
           
           // Clear canvas
           ctx.clearRect(0, 0, gameWidth, gameHeight);
@@ -991,7 +1050,8 @@
               drawPlayers();
           }
 
-          if (gameStarted || gameState.winner) {
+          // Draw hit feedback and power bars if game is active or ending
+          if (gameStarted || gameEnding) {
               drawHitFeedback();
               drawPowerBars();
               // drawHitboxes(); // Uncomment for debugging
@@ -1130,7 +1190,7 @@
 
       // Check for hits between players
       function checkHits() {
-          if (!gameStarted || !players.player1 || !players.player2) return;
+          if (!gameStarted || !players.player1 || !players.player2 || gameEnding) return;
           
           // Don't check hits too frequently
           const now = performance.now();
@@ -1190,7 +1250,7 @@
       // Apply hit effects
       function applyHit(attackerId, targetId, attackPoint, hit) {
           // Don't register hits if the game is over
-          if (document.getElementById('winnerMessage').style.display === 'block') return;
+          if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
           
           lastHitTime = performance.now();
           
@@ -1281,7 +1341,7 @@
 
       // Draw hitboxes for debugging
       function drawHitboxes() {
-          if (!gameStarted || !players.player1 || !players.player2) return;
+          if (!players.player1 || !players.player2) return;
           
           const p1Hitbox = calculateHitboxes('player1');
           const p2Hitbox = calculateHitboxes('player2');
@@ -1313,6 +1373,12 @@
               ctx.beginPath();
               ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
               ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
           }
           
           // Draw player 2 hitboxes
@@ -1337,6 +1403,12 @@
               ctx.beginPath();
               ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
               ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
           }
           
           ctx.restore();
@@ -1546,6 +1618,8 @@
       }
       
       function drawAnimatedStickman(x, y, color, playerId, facingLeft) {
+          const anim = playerAnimations[playerId];
+          const  color, playerId, facingLeft) {
           const anim = playerAnimations[playerId];
           const state = anim.state;
           
