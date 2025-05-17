@@ -353,12 +353,12 @@
       // Load all game sounds
       function loadSounds() {
           const soundFiles = {
-              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
-              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
-              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              hit: '/sounds/hit.mp3',
+              kick: '/sounds/kick.mp3',
+              hurt: '/sounds/hurt.mp3',
+              victory: '/sounds/victory.mp3',
+              gameStart: '/sounds/game-start.mp3',
+              button: '/sounds/button-click.mp3'
           };
           
           let loadedCount = 0;
@@ -869,14 +869,177 @@
       }
       
       function drawBackground() {
-          // Draw floor
-          ctx.fillStyle = '#555';
+          // Sky gradient
+          const skyGradient = ctx.createLinearGradient(0, 0, 0, gameHeight - 50);
+          skyGradient.addColorStop(0, '#1a2a3a');
+          skyGradient.addColorStop(1, '#3a4a5a');
+          ctx.fillStyle = skyGradient;
+          ctx.fillRect(0, 0, gameWidth, gameHeight - 50);
+          
+          // Draw distant mountains
+          drawMountains();
+          
+          // Floor gradient with texture
+          const floorGradient = ctx.createLinearGradient(0, gameHeight - 50, 0, gameHeight);
+          floorGradient.addColorStop(0, '#554433');
+          floorGradient.addColorStop(1, '#443322');
+          ctx.fillStyle = floorGradient;
           ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
           
-          // Draw background elements
-          ctx.fillStyle = '#444';
-          for (let i = 0; i < 5; i++) {
-              ctx.fillRect(gameWidth * i / 5, gameHeight - 150, 10, 100);
+          // Draw floor texture
+          drawFloorTexture();
+          
+          // Draw floor edge highlight
+          ctx.strokeStyle = '#665544';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 50);
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.stroke();
+          
+          // Draw some scattered rocks
+          drawRocks();
+      }
+
+      // Add these new helper functions after the drawBackground function:
+
+      function drawMountains() {
+          ctx.fillStyle = '#2a3a4a';
+          
+          // First mountain range (far)
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 100);
+          
+          // Create a series of mountain peaks
+          const peaks = 5;
+          const peakWidth = gameWidth / peaks;
+          
+          for (let i = 0; i <= peaks; i++) {
+              const x = i * peakWidth;
+              const height = 30 + Math.random() * 40;
+              
+              if (i === 0) {
+                  ctx.lineTo(x, gameHeight - 100);
+              } else {
+                  const cpx1 = x - peakWidth * 0.7;
+                  const cpy1 = gameHeight - 100 - height * 0.3;
+                  const cpx2 = x - peakWidth * 0.3;
+                  const cpy2 = gameHeight - 100 - height * 0.7;
+                  
+                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 100 - height);
+                  
+                  const cpx3 = x + peakWidth * 0.3;
+                  const cpy3 = gameHeight - 100 - height * 0.7;
+                  const cpx4 = x + peakWidth * 0.7;
+                  const cpy4 = gameHeight - 100 - height * 0.3;
+                  
+                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth, gameHeight - 100);
+              }
+          }
+          
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.lineTo(0, gameHeight - 50);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Second mountain range (closer, darker)
+          ctx.fillStyle = '#1a2a3a';
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 70);
+          
+          const peaks2 = 7;
+          const peakWidth2 = gameWidth / peaks2;
+          
+          for (let i = 0; i <= peaks2; i++) {
+              const x = i * peakWidth2;
+              const height = 20 + Math.random() * 30;
+              
+              if (i === 0) {
+                  ctx.lineTo(x, gameHeight - 70);
+              } else {
+                  const cpx1 = x - peakWidth2 * 0.7;
+                  const cpy1 = gameHeight - 70 - height * 0.3;
+                  const cpx2 = x - peakWidth2 * 0.3;
+                  const cpy2 = gameHeight - 70 - height * 0.7;
+                  
+                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 70 - height);
+                  
+                  const cpx3 = x + peakWidth2 * 0.3;
+                  const cpy3 = gameHeight - 70 - height * 0.7;
+                  const cpx4 = x + peakWidth2 * 0.7;
+                  const cpy4 = gameHeight - 70 - height * 0.3;
+                  
+                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth2, gameHeight - 70);
+              }
+          }
+          
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.lineTo(0, gameHeight - 50);
+          ctx.closePath();
+          ctx.fill();
+      }
+
+      function drawFloorTexture() {
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+          ctx.lineWidth = 1;
+          
+          // Draw horizontal texture lines
+          for (let y = gameHeight - 45; y < gameHeight; y += 5) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(gameWidth, y);
+              ctx.stroke();
+          }
+          
+          // Draw some vertical cracks
+          const cracks = 12;
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+          
+          for (let i = 0; i < cracks; i++) {
+              const x = Math.random() * gameWidth;
+              const length = 5 + Math.random() * 15;
+              const startY = gameHeight - 50 + Math.random() * 10;
+              
+              ctx.beginPath();
+              ctx.moveTo(x, startY);
+              
+              // Create a jagged line for the crack
+              let currentY = startY;
+              const segments = 3 + Math.floor(Math.random() * 3);
+              const segmentLength = length / segments;
+              
+              for (let j = 0; j < segments; j++) {
+                  const nextX = x + (Math.random() * 6 - 3);
+                  currentY += segmentLength;
+                  ctx.lineTo(nextX, currentY);
+              }
+              
+              ctx.stroke();
+          }
+      }
+
+      function drawRocks() {
+          // Draw some scattered rocks on the floor
+          const rockCount = 8 + Math.floor(gameWidth / 100);
+          
+          for (let i = 0; i < rockCount; i++) {
+              const x = Math.random() * gameWidth;
+              const y = gameHeight - 50 + Math.random() * 10;
+              const size = 2 + Math.random() * 4;
+              
+              // Don't draw rocks in the center area where players fight
+              if (x > gameWidth * 0.4 && x < gameWidth * 0.6) continue;
+              
+              ctx.fillStyle = `rgba(100, 100, 100, ${0.3 + Math.random() * 0.4})`;
+              ctx.beginPath();
+              ctx.arc(x, y, size, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Add a highlight
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+              ctx.beginPath();
+              ctx.arc(x - size * 0.3, y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+              ctx.fill();
           }
       }
       
