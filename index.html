@@ -612,9 +612,26 @@
                   
                   // Check for winner
                   if (state.winner && !prevWinner) {
-                      // Winner was just determined, but we'll delay showing the message
-                      // The actual display will be handled in the game loop
+                      // Winner was just determined
                       console.log(`Winner determined: ${state.winner}`);
+                      
+                      // Start the game ending sequence if it hasn't already started
+                      if (!gameEnding) {
+                          gameEnding = true;
+                          gameEndTime = performance.now();
+                          
+                          // Set victory/defeat animations immediately
+                          if (state.winner === 'player1') {
+                              playerAnimations.player1.state = VICTORY;
+                              playerAnimations.player2.state = DEFEAT;
+                          } else {
+                              playerAnimations.player1.state = DEFEAT;
+                              playerAnimations.player2.state = VICTORY;
+                          }
+                          
+                          // Play victory sound
+                          playSound('victory');
+                      }
                   } else if (state.winner === null && prevWinner) {
                       // Game has been reset
                       resetGameState();
@@ -1944,6 +1961,10 @@
       
       function showWinner(winner) {
           const winnerMessage = document.getElementById('winnerMessage');
+          
+          // Don't show the message if it's already visible
+          if (winnerMessage.style.display === 'block') return;
+          
           const winnerText = document.getElementById('winnerText');
           
           // Format winner text nicely
