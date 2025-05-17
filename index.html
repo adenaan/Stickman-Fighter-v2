@@ -294,6 +294,17 @@
       let players = {};
       let gameStarted = false;
       let readyPlayers = []; // Track which players are ready
+
+      // Hit detection variables
+      let lastHitTime = 0;
+      let hitFeedback = {
+          active: false,
+          x: 0,
+          y: 0,
+          type: '',
+          time: 0
+      };
+
       const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
       
       // Sound variables
@@ -310,6 +321,16 @@
       const KICK_DAMAGE = 15;
       const HIT_RANGE = 40;
       const KICK_RANGE = 50;
+
+      // Hit detection constants
+      const HEAD_HITBOX_RADIUS = 10;
+      const BODY_HITBOX_WIDTH = 20;
+      const BODY_HITBOX_HEIGHT = 30;
+      const ARM_HITBOX_WIDTH = 30;
+      const LEG_HITBOX_WIDTH = 30;
+      const CRITICAL_HIT_MULTIPLIER = 1.5;
+      const HIT_COOLDOWN = 300; // ms
+      const HIT_FEEDBACK_DURATION = 200; // ms
       
       // Animation states
       const IDLE = 'idle';
@@ -357,6 +378,7 @@
           debugElement.style.display = 'block';
           debugElement.textContent = message;
           console.log(message);
+      
       }
       
       // Initialize the game
@@ -388,12 +410,12 @@
       // Load all game sounds
       function loadSounds() {
           const soundFiles = {
-              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
-              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
-              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              hit: '/sounds/hit.mp3',
+              kick: '/sounds/kick.mp3',
+              hurt: '/sounds/hurt.mp3',
+              victory: '/sounds/victory.mp3',
+              gameStart: '/sounds/game-start.mp3',
+              button: '/sounds/button-click.mp3'
           };
           
           let loadedCount = 0;
@@ -510,6 +532,14 @@
                   
                   players = state.players;
                   gameStarted = state.gameStarted;
+                  
+                  // Add isMoving property if it doesn't exist
+                  if (players.player1 && players.player1.isMoving === undefined) {
+                      players.player1.isMoving = false;
+                  }
+                  if (players.player2 && players.player2.isMoving === undefined) {
+                      players.player2.isMoving = false;
+                  }
                   
                   // Update animation states based on player states
                   if (players.player1) {
@@ -944,6 +974,9 @@
           
           // Update player animations
           updatePlayerAnimations(deltaTime);
+
+          // Update hit detection
+          checkHits();
           
           // Clear canvas
           ctx.clearRect(0, 0, gameWidth, gameHeight);
@@ -952,7 +985,9 @@
               // Draw game elements
               drawBackground();
               drawPlayers();
+              drawHitFeedback();
               drawPowerBars();
+              // drawHitboxes(); // Uncomment for debugging
           }
           
           // Continue the game loop
@@ -1019,6 +1054,276 @@
                   if (anim.defeatFall > 1) anim.defeatFall = 1;
               }
           }
+      }
+
+      // Calculate hitboxes for a player
+      function calculateHitboxes(playerId) {
+          if (!players[playerId]) return null;
+          
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          const facingLeft = playerId === 'player2'; // Player 2 faces left
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          // Calculate center point
+          const centerX = screenX + PLAYER_WIDTH / 2;
+          const headY = screenY + 10 + anim.breatheOffset + yOffset;
+          
+          // Calculate attack point (where hits land)
+          let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
+          let attackY = screenY + 25 + yOffset;
+          
+          if (anim.state === KICKING) {
+              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH : LEG_HITBOX_WIDTH);
+              attackY = screenY + 60 + yOffset;
+          }
+          
+          return {
+              id: playerId,
+              head: {
+                  x: centerX,
+                  y: headY,
+                  radius: HEAD_HITBOX_RADIUS
+              },
+              body: {
+                  x: centerX,
+                  y: screenY + 35 + yOffset,
+                  width: BODY_HITBOX_WIDTH,
+                  height: BODY_HITBOX_HEIGHT
+              },
+              attackPoint: {
+                  x: attackX,
+                  y: attackY,
+                  active: anim.state === HITTING || anim.state === KICKING,
+                  type: anim.state === HITTING ? 'hit' : 'kick'
+              }
+          };
+      }
+
+      // Check for hits between players
+      function checkHits() {
+          if (!gameStarted || !players.player1 || !players.player2) return;
+          
+          // Don't check hits too frequently
+          const now = performance.now();
+          if (now - lastHitTime < HIT_COOLDOWN) return;
+          
+          // Calculate hitboxes
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          // Check player 1 attacking player 2
+          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT) {
+              const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
+              if (hit) {
+                  applyHit('player1', 'player2', p1Hitbox.attackPoint, hit);
+              }
+          }
+          
+          // Check player 2 attacking player 1
+          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT) {
+              const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
+              if (hit) {
+                  applyHit('player2', 'player1', p2Hitbox.attackPoint, hit);
+              }
+          }
+      }
+
+      // Detect if an attack point hits a hitbox
+      function detectHit(attackPoint, targetHitbox) {
+          // Check head hit (circular collision)
+          const dx = attackPoint.x - targetHitbox.head.x;
+          const dy = attackPoint.y - targetHitbox.head.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < targetHitbox.head.radius + 10) {
+              return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
+          }
+          
+          // Check body hit (rectangular collision)
+          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2;
+          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2;
+          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2;
+          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2;
+          
+          if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
+              attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
+              return { zone: 'body', point: { x: attackPoint.x, y: attackPoint.y } };
+          }
+          
+          return null;
+      }
+
+      // Apply hit effects
+      function applyHit(attackerId, targetId, attackPoint, hit) {
+          // Don't register hits if the game is over
+          if (document.getElementById('winnerMessage').style.display === 'block') return;
+          
+          lastHitTime = performance.now();
+          
+          // Calculate damage based on attack type and hit zone
+          let damage = attackPoint.type === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
+          
+          // Critical hit for headshots
+          if (hit.zone === 'head') {
+              damage *= CRITICAL_HIT_MULTIPLIER;
+          }
+          
+          // Send attack to server
+          if (socket) {
+              socket.emit('registerHit', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  damage: damage,
+                  hitZone: hit.zone
+              });
+          }
+          
+          // Show hit feedback
+          hitFeedback = {
+              active: true,
+              x: hit.point.x,
+              y: hit.point.y,
+              type: hit.zone === 'head' ? 'critical' : 'normal',
+              time: performance.now()
+          };
+      }
+
+      // Draw hit feedback
+      function drawHitFeedback() {
+          if (!hitFeedback.active) return;
+          
+          const now = performance.now();
+          const elapsed = now - hitFeedback.time;
+          
+          if (elapsed > HIT_FEEDBACK_DURATION) {
+              hitFeedback.active = false;
+              return;
+          }
+          
+          // Calculate animation progress (0 to 1)
+          const progress = elapsed / HIT_FEEDBACK_DURATION;
+          const size = 20 + progress * 30;
+          const opacity = 1 - progress;
+          
+          ctx.save();
+          
+          // Draw hit effect
+          if (hitFeedback.type === 'critical') {
+              // Critical hit effect (red burst)
+              ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+          } else {
+              // Normal hit effect (white burst)
+              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+              ctx.strokeStyle = `rgba(200, 200, 200, ${opacity})`;
+          }
+          
+          // Draw burst
+          ctx.beginPath();
+          ctx.arc(hitFeedback.x, hitFeedback.y, size / 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw impact lines
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 8; i++) {
+              const angle = Math.PI * 2 * i / 8;
+              const innerRadius = size / 2;
+              const outerRadius = size;
+              
+              ctx.beginPath();
+              ctx.moveTo(
+                  hitFeedback.x + Math.cos(angle) * innerRadius,
+                  hitFeedback.y + Math.sin(angle) * innerRadius
+              );
+              ctx.lineTo(
+                  hitFeedback.x + Math.cos(angle) * outerRadius,
+                  hitFeedback.y + Math.sin(angle) * outerRadius
+              );
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw hitboxes for debugging
+      function drawHitboxes() {
+          if (!gameStarted || !players.player1 || !players.player2) return;
+          
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          ctx.save();
+          
+          // Draw player 1 hitboxes
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = 2;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p1Hitbox.body.x - p1Hitbox.body.width / 2,
+              p1Hitbox.body.y - p1Hitbox.body.height / 2,
+              p1Hitbox.body.width,
+              p1Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p1Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+          }
+          
+          // Draw player 2 hitboxes
+          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p2Hitbox.body.x - p2Hitbox.body.width / 2,
+              p2Hitbox.body.y - p2Hitbox.body.height / 2,
+              p2Hitbox.body.width,
+              p2Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p2Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+          }
+          
+          ctx.restore();
       }
       
       function drawBackground() {
