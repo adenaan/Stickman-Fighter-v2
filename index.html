@@ -1031,6 +1031,7 @@
                   // Show winner message after delay
                   showWinner(gameState.winner);
                   winnerAnnounced = true;
+                  console.log("Winner announced:", gameState.winner);
               }
           }
 
@@ -1750,59 +1751,6 @@
               ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
               ctx.lineTo(x + 5, y + 45 + yOffset);
               ctx.stroke();
-          } else {
-              // Normal or walking pose
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5 + armOffset, y + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5 - armOffset, y + 25 + yOffset);
-              ctx.stroke();
-          }
-          
-          // Legs based on state
-          if (state === KICKING) {
-              // Kicking pose with animation
-              const kickExtension = Math.sin(animationFrame * 2) * 5;
-              
-              // Standing leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 70 + yOffset);
-              ctx.stroke();
-              
-              // Kicking leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH + 20 + kickExtension, y + 60 + yOffset);
-              ctx.stroke();
-          } else if (state === VICTORY) {
-              // Victory pose - slight bounce in legs
-              const bounce = Math.sin(anim.victoryJump * 2) * 3;
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10 - bounce, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10 + bounce, y + 70 + yOffset);
-              ctx.stroke();
-          } else if (state === DEFEAT) {
-              // Defeat pose - limp legs
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 60 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 60 + yOffset);
-              ctx.stroke();
           } else if (state === WALKING) {
               // Walking animation
               ctx.beginPath();
@@ -1943,11 +1891,15 @@
       }
       
       function showWinner(winner) {
+          console.log("Showing winner message for:", winner);
+          
           const winnerMessage = document.getElementById('winnerMessage');
           const winnerText = document.getElementById('winnerText');
           
           // Format winner text nicely
           winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
+          
+          // Make sure the winner message is visible
           winnerMessage.style.display = 'block';
           
           // Play victory sound
