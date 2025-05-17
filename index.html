@@ -294,6 +294,7 @@
       let players = {};
       let gameStarted = false;
       let readyPlayers = []; // Track which players are ready
+      let gameState = {};
 
       // Hit detection variables
       let lastHitTime = 0;
@@ -410,12 +411,12 @@
       // Load all game sounds
       function loadSounds() {
           const soundFiles = {
-              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
-              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
-              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              hit: '/sounds/hit.mp3',
+              kick: '/sounds/kick.mp3',
+              hurt: '/sounds/hurt.mp3',
+              victory: '/sounds/victory.mp3',
+              gameStart: '/sounds/game-start.mp3',
+              button: '/sounds/button-click.mp3'
           };
           
           let loadedCount = 0;
@@ -532,6 +533,7 @@
                   
                   players = state.players;
                   gameStarted = state.gameStarted;
+                  gameState = state;
                   
                   // Add isMoving property if it doesn't exist
                   if (players.player1 && players.player1.isMoving === undefined) {
@@ -981,10 +983,15 @@
           // Clear canvas
           ctx.clearRect(0, 0, gameWidth, gameHeight);
           
-          if (gameStarted) {
-              // Draw game elements
-              drawBackground();
+          // Draw game elements
+          drawBackground();
+
+          // Always draw players, even if game is not started
+          if (players.player1 && players.player2) {
               drawPlayers();
+          }
+
+          if (gameStarted || gameState.winner) {
               drawHitFeedback();
               drawPowerBars();
               // drawHitboxes(); // Uncomment for debugging
@@ -1087,10 +1094,15 @@
           // Calculate attack point (where hits land)
           let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
           let attackY = screenY + 25 + yOffset;
-          
-          if (anim.state === KICKING) {
-              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH : LEG_HITBOX_WIDTH);
+          let attackRange = 10; // Default attack range
+
+          if (anim.state === HITTING) {
+              attackRange = 10;
+          } else if (anim.state === KICKING) {
+              // Extend kick range and adjust position
+              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH - 10 : LEG_HITBOX_WIDTH + 10);
               attackY = screenY + 60 + yOffset;
+              attackRange = 15; // Larger range for kicks
           }
           
           return {
@@ -1110,7 +1122,8 @@
                   x: attackX,
                   y: attackY,
                   active: anim.state === HITTING || anim.state === KICKING,
-                  type: anim.state === HITTING ? 'hit' : 'kick'
+                  type: anim.state === HITTING ? 'hit' : 'kick',
+                  range: attackRange
               }
           };
       }
@@ -1148,20 +1161,23 @@
 
       // Detect if an attack point hits a hitbox
       function detectHit(attackPoint, targetHitbox) {
+          // Get attack range (or default to 10)
+          const range = attackPoint.range || 10;
+          
           // Check head hit (circular collision)
           const dx = attackPoint.x - targetHitbox.head.x;
           const dy = attackPoint.y - targetHitbox.head.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
           
-          if (distance < targetHitbox.head.radius + 10) {
+          if (distance < targetHitbox.head.radius + range) {
               return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
           }
           
-          // Check body hit (rectangular collision)
-          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2;
-          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2;
-          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2;
-          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2;
+          // Check body hit (rectangular collision with expanded range)
+          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2 - range;
+          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2 + range;
+          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2 - range;
+          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2 + range;
           
           if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
               attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
@@ -1858,7 +1874,8 @@
           const winnerMessage = document.getElementById('winnerMessage');
           const winnerText = document.getElementById('winnerText');
           
-          winnerText.textContent = `${winner} wins!`;
+          // Format winner text nicely
+          winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
           winnerMessage.style.display = 'block';
           
           // Play victory sound
@@ -1877,6 +1894,18 @@
           
           // Clear ready players array
           readyPlayers = [];
+          
+          // Ensure animations continue to run
+          if (winner === 'player1') {
+              playerAnimations.player1.state = VICTORY;
+              playerAnimations.player2.state = DEFEAT;
+          } else {
+              playerAnimations.player2.state = VICTORY;
+              playerAnimations.player1.state = DEFEAT;
+          }
+          
+          // Reset hit feedback
+          hitFeedback.active = false;
       }
   </script>
 </body>
