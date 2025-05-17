@@ -473,7 +473,7 @@
           // Set up sound control
           setupSoundControl();
           
-          // Initialize visual systems (weather and background)
+          // Initialize weather and background systems
           initializeVisualSystems();
           
           // Set up visual controls
@@ -1674,4 +1674,2139 @@
               ctx.fill();
               
               // Draw attack range
-              ctx.strokeStyle = 'rgba(0, 0, 255,
+              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+      
+      function drawBackground() {
+          // Sky gradient
+          const skyGradient = ctx.createLinearGradient(0, 0, 0, gameHeight - 50);
+          skyGradient.addColorStop(0, '#1a2a3a');
+          skyGradient.addColorStop(1, '#3a4a5a');
+          ctx.fillStyle = skyGradient;
+          ctx.fillRect(0, 0, gameWidth, gameHeight - 50);
+          
+          // Draw distant mountains
+          drawMountains();
+          
+          // Floor gradient with texture
+          const floorGradient = ctx.createLinearGradient(0, gameHeight - 50, 0, gameHeight);
+          floorGradient.addColorStop(0, '#554433');
+          floorGradient.addColorStop(1, '#443322');
+          ctx.fillStyle = floorGradient;
+          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
+          
+          // Draw floor texture
+          drawFloorTexture();
+          
+          // Draw floor edge highlight
+          ctx.strokeStyle = '#665544';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 50);
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.stroke();
+          
+          // Draw some scattered rocks
+          drawRocks();
+      }
+
+      function drawMountains() {
+          ctx.fillStyle = '#2a3a4a';
+          
+          // First mountain range (far)
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 100);
+          
+          // Create a series of mountain peaks
+          const peaks = 5;
+          const peakWidth = gameWidth / peaks;
+          
+          for (let i = 0; i <= peaks; i++) {
+              const x = i * peakWidth;
+              const height = 30 + Math.random() * 40;
+              
+              if (i === 0) {
+                  ctx.lineTo(x, gameHeight - 100);
+              } else {
+                  const cpx1 = x - peakWidth * 0.7;
+                  const cpy1 = gameHeight - 100 - height * 0.3;
+                  const cpx2 = x - peakWidth * 0.3;
+                  const cpy2 = gameHeight - 100 - height * 0.7;
+                  
+                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 100 - height);
+                  
+                  const cpx3 = x + peakWidth * 0.3;
+                  const cpy3 = gameHeight - 100 - height * 0.7;
+                  const cpx4 = x + peakWidth * 0.7;
+                  const cpy4 = gameHeight - 100 - height * 0.3;
+                  
+                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth, gameHeight - 100);
+              }
+          }
+          
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.lineTo(0, gameHeight - 50);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Second mountain range (closer, darker)
+          ctx.fillStyle = '#1a2a3a';
+          ctx.beginPath();
+          ctx.moveTo(0, gameHeight - 70);
+          
+          const peaks2 = 7;
+          const peakWidth2 = gameWidth / peaks2;
+          
+          for (let i = 0; i <= peaks2; i++) {
+              const x = i * peakWidth2;
+              const height = 20 + Math.random() * 30;
+              
+              if (i === 0) {
+                  ctx.lineTo(x, gameHeight - 70);
+              } else {
+                  const cpx1 = x - peakWidth2 * 0.7;
+                  const cpy1 = gameHeight - 70 - height * 0.3;
+                  const cpx2 = x - peakWidth2 * 0.3;
+                  const cpy2 = gameHeight - 70 - height * 0.7;
+                  
+                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 70 - height);
+                  
+                  const cpx3 = x + peakWidth2 * 0.3;
+                  const cpy3 = gameHeight - 70 - height * 0.7;
+                  const cpx4 = x + peakWidth2 * 0.7;
+                  const cpy4 = gameHeight - 70 - height * 0.3;
+                  
+                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth2, gameHeight - 70);
+              }
+          }
+          
+          ctx.lineTo(gameWidth, gameHeight - 50);
+          ctx.lineTo(0, gameHeight - 50);
+          ctx.closePath();
+          ctx.fill();
+      }
+
+      function drawFloorTexture() {
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+          ctx.lineWidth = 1;
+          
+          // Draw horizontal texture lines
+          for (let y = gameHeight - 45; y < gameHeight; y += 5) {
+              ctx.beginPath();
+              ctx.moveTo(0, y);
+              ctx.lineTo(gameWidth, y);
+              ctx.stroke();
+          }
+          
+          // Draw some vertical cracks
+          const cracks = 12;
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+          
+          for (let i = 0; i < cracks; i++) {
+              const x = Math.random() * gameWidth;
+              const length = 5 + Math.random() * 15;
+              const startY = gameHeight - 50 + Math.random() * 10;
+              
+              ctx.beginPath();
+              ctx.moveTo(x, startY);
+              
+              // Create a jagged line for the crack
+              let currentY = startY;
+              const segments = 3 + Math.floor(Math.random() * 3);
+              const segmentLength = length / segments;
+              
+              for (let j = 0; j < segments; j++) {
+                  const nextX = x + (Math.random() * 6 - 3);
+                  currentY += segmentLength;
+                  ctx.lineTo(nextX, currentY);
+              }
+              
+              ctx.stroke();
+          }
+      }
+
+      function drawRocks() {
+          // Draw some scattered rocks on the floor
+          const rockCount = 8 + Math.floor(gameWidth / 100);
+          
+          for (let i = 0; i < rockCount; i++) {
+              const x = Math.random() * gameWidth;
+              const y = gameHeight - 50 + Math.random() * 10;
+              const size = 2 + Math.random() * 4;
+              
+              // Don't draw rocks in the center area where players fight
+              if (x > gameWidth * 0.4 && x < gameWidth * 0.6) continue;
+              
+              ctx.fillStyle = `rgba(100, 100, 100, ${0.3 + Math.random() * 0.4})`;
+              ctx.beginPath();
+              ctx.arc(x, y, size, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Add a highlight
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+              ctx.beginPath();
+              ctx.arc(x - size * 0.3, y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+              ctx.fill();
+          }
+      }
+      
+      function drawPlayers() {
+          if (!players.player1 || !players.player2) return;
+          
+          // Calculate scale factor based on screen width to keep players visible
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Adjust player positions for smaller screens
+          const p1ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player1.x * scaleFactor));
+          const p2ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player2.x * scaleFactor));
+          
+          // Draw player 1
+          drawAnimatedStickman(
+              p1ScreenX, 
+              floorY - PLAYER_HEIGHT, 
+              '#FF5555', 
+              'player1', 
+              false
+          );
+          
+          // Draw player 2
+          drawAnimatedStickman(
+              p2ScreenX, 
+              floorY - PLAYER_HEIGHT, 
+              '#5555FF', 
+              'player2', 
+              true
+          );
+      }
+      
+      function drawAnimatedStickman(x, y, color, playerId, facingLeft) {
+          const anim = playerAnimations[playerId];
+          const state = anim.state;
+          
+          ctx.save();
+          
+          // Apply victory jump animation
+          let yOffset = 0;
+          if (state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          }
+          
+          // Apply defeat fall animation
+          if (state === DEFEAT) {
+              // Rotate the entire stickman
+              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
+              ctx.rotate(Math.PI / 2 * anim.defeatFall);
+              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
+              
+              // Add a falling effect
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          // Apply hurt animation
+          if (state === HURT) {
+              // Rotate the entire stickman
+              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
+              ctx.rotate(anim.hurtAngle);
+              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
+          }
+          
+          // Flip if facing left
+          if (facingLeft) {
+              ctx.translate(x + PLAYER_WIDTH / 2, 0);
+              ctx.scale(-1, 1);
+              ctx.translate(-x - PLAYER_WIDTH / 2, 0);
+          }
+          
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          
+          // Add breathing animation for idle
+          let breatheOffset = 0;
+          if (state === IDLE) {
+              breatheOffset = anim.breatheOffset;
+          }
+          
+          // Add walking animation
+          let legOffset = 0;
+          let armOffset = 0;
+          if (state === WALKING) {
+              legOffset = Math.sin(anim.walkCycle) * 10;
+              armOffset = Math.sin(anim.walkCycle + Math.PI) * 5;
+          }
+          
+          // Head with slight bobbing
+          ctx.beginPath();
+          ctx.arc(
+              x + PLAYER_WIDTH / 2, 
+              y + 10 + breatheOffset + yOffset, 
+              10, 
+              0, 
+              Math.PI * 2
+          );
+          ctx.stroke();
+          
+          // Body with slight breathing movement
+          ctx.beginPath();
+          ctx.moveTo(
+              x + PLAYER_WIDTH / 2, 
+              y + 20 + breatheOffset + yOffset
+          );
+          ctx.lineTo(
+              x + PLAYER_WIDTH / 2, 
+              y + 50 + yOffset
+          );
+          ctx.stroke();
+          
+          // Arms based on state
+          if (state === HITTING) {
+              // Hitting pose with animation
+              const hitExtension = Math.sin(animationFrame * 2) * 5;
+              
+              // Extended punching arm
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH + 15 + hitExtension, y + 25 + yOffset);
+              ctx.stroke();
+              
+              // Rear arm
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 40 + yOffset);
+              ctx.stroke();
+          } else if (state === KICKING) {
+              // Kicking pose with animation
+              // Arms in balance position
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 25 + yOffset);
+              ctx.stroke();
+          } else if (state === VICTORY) {
+              // Victory pose - arms up
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 15 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH, y + 5 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 15 + yOffset);
+              ctx.lineTo(x, y + 5 + yOffset);
+              ctx.stroke();
+          } else if (state === DEFEAT) {
+              // Defeat pose - limp arms
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 45 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 45 + yOffset);
+              ctx.stroke();
+          } else {
+              // Normal or walking pose
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5 + armOffset, y + 25 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5 - armOffset, y + 25 + yOffset);
+              ctx.stroke();
+          }
+          
+          // Legs based on state
+          if (state === KICKING) {
+              // Kicking pose with animation
+              const kickExtension = Math.sin(animationFrame * 2) * 5;
+              
+              // Standing leg
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 70 + yOffset);
+              ctx.stroke();
+              
+              // Kicking leg
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH + 20 + kickExtension, y + 60 + yOffset);
+              ctx.stroke();
+          } else if (state === VICTORY) {
+              // Victory pose - slight bounce in legs
+              const bounce = Math.sin(anim.victoryJump * 2) * 3;
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10 - bounce, y + 70 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10 + bounce, y + 70 + yOffset);
+              ctx.stroke();
+          } else if (state === DEFEAT) {
+              // Defeat pose - limp legs
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 60 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 60 + yOffset);
+              ctx.stroke();
+          } else if (state === WALKING) {
+              // Walking animation
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10 + legOffset, y + 70 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10 - legOffset, y + 70 + yOffset);
+              ctx.stroke();
+          } else {
+              // Normal pose
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 70 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70 + yOffset);
+              ctx.stroke();
+          }
+          
+          // If hurt, draw stars around head
+          if (state === HURT) {
+              ctx.strokeStyle = 'yellow';
+              for (let i = 0; i < 3; i++) {
+                  const angle = Math.PI * 2 * i / 3 + animationFrame;
+                  const distance = 20 + Math.sin(animationFrame) * 5;
+                  const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
+                  const starY = y + 10 + Math.sin(angle) * distance + yOffset;
+                  
+                  // Draw animated stars
+                  const starSize = 5 + Math.sin(animationFrame * 2 + i) * 2;
+                  
+                  ctx.beginPath();
+                  ctx.moveTo(starX - starSize, starY);
+                  ctx.lineTo(starX + starSize, starY);
+                  ctx.stroke();
+                  
+                  ctx.beginPath();
+                  ctx.moveTo(starX, starY - starSize);
+                  ctx.lineTo(starX, starY + starSize);
+                  ctx.stroke();
+              }
+          }
+          
+          // Draw victory sparkles
+          if (state === VICTORY) {
+              ctx.strokeStyle = 'gold';
+              for (let i = 0; i < 5; i++) {
+                  const angle = Math.PI * 2 * i / 5 + animationFrame * 0.5;
+                  const distance = 30 + Math.sin(animationFrame + i) * 10;
+                  const sparkleX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
+                  const sparkleY = y + 30 + Math.sin(angle) * distance + yOffset;
+                  
+                  // Draw animated sparkles
+                  const sparkleSize = 3 + Math.sin(animationFrame * 3 + i) * 2;
+                  
+                  // Draw a star shape
+                  ctx.beginPath();
+                  for (let j = 0; j < 5; j++) {
+                      const starAngle = Math.PI * 2 * j / 5 + animationFrame;
+                      const starX = sparkleX + Math.cos(starAngle) * sparkleSize;
+                      const starY = sparkleY + Math.sin(starAngle) * sparkleSize;
+                      
+                      if (j === 0) {
+                          ctx.moveTo(starX, starY);
+                      } else {
+                          ctx.lineTo(starX, starY);
+                      }
+                  }
+                  ctx.closePath();
+                  ctx.stroke();
+              }
+          }
+          
+          ctx.restore();
+      }
+      
+      function drawPowerBars() {
+          if (!players.player1 || !players.player2) return;
+          
+          const barHeight = 15;
+          const margin = 10;
+          
+          // Responsive bar width based on screen size
+          const barWidth = Math.min(200, (gameWidth / 2) - 20);
+          
+          // Player 1 power bar
+          ctx.fillStyle = '#333';
+          ctx.fillRect(margin, margin, barWidth, barHeight);
+          
+          // Animate power bar when taking damage
+          let p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
+          
+          // Add pulsing effect when low health
+          if (players.player1.power < MAX_POWER * 0.3) {
+              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
+              ctx.fillStyle = `rgba(255, 85, 85, ${pulse})`;
+          } else {
+              ctx.fillStyle = '#FF5555';
+          }
+          
+          ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
+          
+          ctx.strokeStyle = '#FFF';
+          ctx.strokeRect(margin, margin, barWidth, barHeight);
+          
+          ctx.fillStyle = '#FFF';
+          ctx.font = '12px Arial';
+          ctx.fillText('Player 1', margin, margin + barHeight + 12);
+          
+          // Player 2 power bar
+          ctx.fillStyle = '#333';
+          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          // Animate power bar when taking damage
+          let p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
+          
+          // Add pulsing effect when low health
+          if (players.player2.power < MAX_POWER * 0.3) {
+              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
+              ctx.fillStyle = `rgba(85, 85, 255, ${pulse})`;
+          } else {
+              ctx.fillStyle = '#5555FF';
+          }
+          
+          ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
+          
+          ctx.strokeStyle = '#FFF';
+          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          ctx.fillStyle = '#FFF';
+          ctx.font = '12px Arial';
+          ctx.fillText('Player 2', gameWidth - margin - barWidth, margin + barHeight + 12);
+      }
+      
+      function showWinner(winner) {
+          const winnerMessage = document.getElementById('winnerMessage');
+          const winnerText = document.getElementById('winnerText');
+          
+          // Format winner text nicely
+          winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
+          
+          // Make sure the display is set to block
+          winnerMessage.style.display = 'block';
+          
+          // Play victory sound
+          playSound('victory');
+          
+          // Reset ready status indicators
+          document.getElementById('player1Status').className = 'status-indicator status-waiting';
+          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+          document.getElementById('player2Status').className = 'status-indicator status-waiting';
+          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+          
+          // Reset restart button
+          const restartBtn = document.getElementById('restartBtn');
+          restartBtn.textContent = 'Play Again';
+          restartBtn.disabled = false;
+          
+          // Clear ready players array
+          readyPlayers = [];
+          
+          // Ensure animations continue to run
+          if (winner === 'player1') {
+              playerAnimations.player1.state = VICTORY;
+              playerAnimations.player2.state = DEFEAT;
+          } else {
+              playerAnimations.player2.state = VICTORY;
+              playerAnimations.player1.state = DEFEAT;
+          }
+          
+          // Reset hit feedback
+          hitFeedback.active = false;
+          
+          console.log(`Winner screen displayed for ${winner}`);
+      }
+
+      // Weather System Class
+      class WeatherSystem {
+          constructor(canvas, ctx) {
+              this.canvas = canvas;
+              this.ctx = ctx;
+              this.weatherType = "none"; // none, rain, snow, storm, fog
+              this.particles = [];
+              this.maxParticles = 200;
+              this.windDirection = 0; // -1 left, 0 none, 1 right
+              this.windStrength = 0;
+              this.fogOpacity = 0;
+              this.lightningActive = false;
+              this.lightningAlpha = 0;
+              this.lastLightningTime = 0;
+
+              // Weather transition variables
+              this.transitioning = false;
+              this.transitionProgress = 0;
+              this.transitionTarget = "none";
+              this.transitionSpeed = 0.01;
+
+              // Weather cycle variables
+              this.autoCycle = false;
+              this.weatherDuration = 30000; // 30 seconds per weather
+              this.lastWeatherChange = Date.now();
+              this.availableWeathers = ["none", "rain", "snow", "storm", "fog"];
+          }
+
+          // Initialize the weather system
+          init() {
+              // Start with no weather
+              this.setWeather("none");
+          }
+
+          // Set a specific weather type with optional transition
+          setWeather(type, transition = true) {
+              if (!this.availableWeathers.includes(type)) {
+                  console.error(`Weather type "${type}" not recognized`);
+                  return;
+              }
+
+              if (transition && this.weatherType !== type) {
+                  // Start transition to new weather
+                  this.transitioning = true;
+                  this.transitionTarget = type;
+                  this.transitionProgress = 0;
+              } else {
+                  // Immediately set weather
+                  this.weatherType = type;
+                  this.resetWeatherProperties();
+                  this.generateParticles();
+              }
+
+              console.log(`Weather changing to: ${type}`);
+          }
+
+          // Reset weather properties based on current type
+          resetWeatherProperties() {
+              // Clear existing particles
+              this.particles = [];
+
+              // Set properties based on weather type
+              switch (this.weatherType) {
+                  case "none":
+                      this.maxParticles = 0;
+                      this.windDirection = 0;
+                      this.windStrength = 0;
+                      this.fogOpacity = 0;
+                      break;
+
+                  case "rain":
+                      this.maxParticles = 200;
+                      this.windDirection = Math.random() > 0.5 ? -1 : 1;
+                      this.windStrength = 1 + Math.random() * 2;
+                      this.fogOpacity = 0.1;
+                      break;
+
+                  case "snow":
+                      this.maxParticles = 150;
+                      this.windDirection = Math.random() > 0.5 ? -1 : 1;
+                      this.windStrength = 0.5 + Math.random();
+                      this.fogOpacity = 0.15;
+                      break;
+
+                  case "storm":
+                      this.maxParticles = 250;
+                      this.windDirection = Math.random() > 0.5 ? -1 : 1;
+                      this.windStrength = 3 + Math.random() * 3;
+                      this.fogOpacity = 0.25;
+                      break;
+
+                  case "fog":
+                      this.maxParticles = 50;
+                      this.windDirection = 0;
+                      this.windStrength = 0.2;
+                      this.fogOpacity = 0.4;
+                      break;
+              }
+          }
+
+          // Generate particles based on current weather type
+          generateParticles() {
+              this.particles = [];
+
+              for (let i = 0; i < this.maxParticles; i++) {
+                  this.addParticle();
+              }
+          }
+
+          // Add a single particle
+          addParticle() {
+              if (this.particles.length >= this.maxParticles) return;
+
+              const particle = {
+                  x: Math.random() * this.canvas.width,
+                  y: Math.random() * this.canvas.height,
+                  size: 1,
+                  speed: 1,
+                  opacity: 1,
+                  wind: 0,
+              };
+
+              // Customize particle based on weather type
+              switch (this.weatherType) {
+                  case "rain":
+                      particle.y = Math.random() * -100;
+                      particle.size = 1 + Math.random();
+                      particle.speed = 10 + Math.random() * 10;
+                      particle.wind = this.windDirection * this.windStrength;
+                      particle.length = 10 + Math.random() * 20;
+                      particle.opacity = 0.6 + Math.random() * 0.4;
+                      break;
+
+                  case "snow":
+                      particle.y = Math.random() * -50;
+                      particle.size = 2 + Math.random() * 3;
+                      particle.speed = 1 + Math.random() * 2;
+                      particle.wind = this.windDirection * this.windStrength;
+                      particle.wobble = Math.random() * 0.1;
+                      particle.wobbleSpeed = 0.01 + Math.random() * 0.05;
+                      particle.wobblePos = Math.random() * Math.PI * 2;
+                      particle.opacity = 0.7 + Math.random() * 0.3;
+                      break;
+
+                  case "storm":
+                      particle.y = Math.random() * -100;
+                      particle.size = 1 + Math.random() * 2;
+                      particle.speed = 15 + Math.random() * 15;
+                      particle.wind = this.windDirection * this.windStrength;
+                      particle.length = 15 + Math.random() * 25;
+                      particle.opacity = 0.5 + Math.random() * 0.5;
+                      break;
+
+                  case "fog":
+                      particle.x = Math.random() * this.canvas.width;
+                      particle.y = this.canvas.height - 50 - Math.random() * 100;
+                      particle.size = 50 + Math.random() * 100;
+                      particle.speed = 0.2 + Math.random() * 0.3;
+                      particle.wind = this.windDirection * this.windStrength;
+                      particle.opacity = 0.05 + Math.random() * 0.1;
+                      break;
+              }
+
+              this.particles.push(particle);
+          }
+
+          // Update weather system
+          update(deltaTime) {
+              // Handle automatic weather cycling
+              if (this.autoCycle && !this.transitioning) {
+                  const now = Date.now();
+                  if (now - this.lastWeatherChange > this.weatherDuration) {
+                      // Pick a new random weather that's different from current
+                      let newWeather;
+                      do {
+                          const randomIndex = Math.floor(Math.random() * this.availableWeathers.length);
+                          newWeather = this.availableWeathers[randomIndex];
+                      } while (newWeather === this.weatherType);
+
+                      this.setWeather(newWeather);
+                      this.lastWeatherChange = now;
+                  }
+              }
+
+              // Handle weather transitions
+              if (this.transitioning) {
+                  this.transitionProgress += this.transitionSpeed * (deltaTime / 16.67);
+
+                  if (this.transitionProgress >= 1) {
+                      this.transitioning = false;
+                      this.weatherType = this.transitionTarget;
+                      this.resetWeatherProperties();
+                      this.generateParticles();
+                  }
+              }
+
+              // Update particles based on weather type
+              this.updateParticles(deltaTime);
+
+              // Handle lightning for storm weather
+              if (this.weatherType === "storm" || (this.transitioning && this.transitionTarget === "storm")) {
+                  this.updateLightning(deltaTime);
+              } else {
+                  this.lightningActive = false;
+                  this.lightningAlpha = 0;
+              }
+          }
+
+          // Update all particles
+          updateParticles(deltaTime) {
+              // Normalize for 60fps
+              const timeScale = deltaTime / 16.67;
+
+              // Update existing particles
+              for (let i = this.particles.length - 1; i >= 0; i--) {
+                  const p = this.particles[i];
+
+                  // Apply movement based on weather type
+                  switch (this.weatherType) {
+                      case "rain":
+                      case "storm":
+                          p.y += p.speed * timeScale;
+                          p.x += p.wind * timeScale;
+
+                          // Remove if out of bounds
+                          if (p.y > this.canvas.height) {
+                              this.particles.splice(i, 1);
+                              this.addParticle();
+                          }
+                          break;
+
+                      case "snow":
+                          p.y += p.speed * timeScale;
+                          p.wobblePos += p.wobbleSpeed * timeScale;
+                          p.x += p.wind * timeScale + Math.sin(p.wobblePos) * 2;
+
+                          // Remove if out of bounds
+                          if (p.y > this.canvas.height) {
+                              this.particles.splice(i, 1);
+                              this.addParticle();
+                          }
+                          break;
+
+                      case "fog":
+                          p.x += p.wind * timeScale;
+
+                          // Wrap around if out of bounds
+                          if (p.x > this.canvas.width + p.size) {
+                              p.x = -p.size;
+                          } else if (p.x < -p.size) {
+                              p.x = this.canvas.width + p.size;
+                          }
+                          break;
+                  }
+              }
+
+              // Add new particles if needed
+              while (this.particles.length < this.maxParticles && this.weatherType !== "none") {
+                  this.addParticle();
+              }
+          }
+
+          // Update lightning effect for storm weather
+          updateLightning(deltaTime) {
+              const now = Date.now();
+
+              // If lightning is active, fade it out
+              if (this.lightningActive) {
+                  this.lightningAlpha -= 0.05 * (deltaTime / 16.67);
+                  if (this.lightningAlpha <= 0) {
+                      this.lightningActive = false;
+                      this.lightningAlpha = 0;
+                  }
+              }
+              // Otherwise, randomly trigger new lightning
+              else if (now - this.lastLightningTime > 3000) {
+                  // At least 3 seconds between strikes
+                  if (Math.random() < 0.01 * (deltaTime / 16.67)) {
+                      this.lightningActive = true;
+                      this.lightningAlpha = 0.8 + Math.random() * 0.2;
+                      this.lastLightningTime = now;
+
+                      // Play thunder sound if available
+                      if (window.playSound && Math.random() < 0.7) {
+                          setTimeout(
+                              () => {
+                                  if (window.soundEnabled) {
+                                      window.playSound("thunder");
+                                  }
+                              },
+                              300 + Math.random() * 1000
+                          ); // Thunder delay after lightning
+                      }
+                  }
+              }
+          }
+
+          // Draw weather effects
+          draw() {
+              // Skip if no weather or fully transitioning out
+              if (this.weatherType === "none" && !this.transitioning) return;
+              if (this.transitioning && this.transitionTarget === "none" && this.transitionProgress > 0.9) return;
+
+              // Calculate opacity based on transition
+              let opacity = 1;
+              if (this.transitioning) {
+                  if (this.transitionTarget === "none") {
+                      opacity = 1 - this.transitionProgress;
+                  } else if (this.weatherType === "none") {
+                      opacity = this.transitionProgress;
+                  }
+              }
+
+              // Draw lightning flash
+              if (this.lightningActive) {
+                  this.ctx.fillStyle = `rgba(255, 255, 255, ${this.lightningAlpha * opacity})`;
+                  this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+              }
+
+              // Draw fog overlay
+              if (this.fogOpacity > 0) {
+                  const fogOpacity = this.transitioning ? this.fogOpacity * opacity : this.fogOpacity;
+
+                  this.ctx.fillStyle = `rgba(200, 215, 220, ${fogOpacity})`;
+                  this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+              }
+
+              // Draw particles
+              for (const p of this.particles) {
+                  // Skip if fully transparent
+                  if (p.opacity * opacity <= 0) continue;
+
+                  this.ctx.save();
+
+                  switch (this.weatherType) {
+                      case "rain":
+                      case "storm":
+                          // Draw rain drop
+                          this.ctx.strokeStyle = `rgba(200, 230, 255, ${p.opacity * opacity})`;
+                          this.ctx.lineWidth = p.size;
+                          this.ctx.beginPath();
+                          this.ctx.moveTo(p.x, p.y);
+                          this.ctx.lineTo(p.x + p.wind * 0.5, p.y + p.length);
+                          this.ctx.stroke();
+                          break;
+
+                      case "snow":
+                          // Draw snowflake
+                          this.ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity * opacity})`;
+                          this.ctx.beginPath();
+                          this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                          this.ctx.fill();
+                          break;
+
+                      case "fog":
+                          // Draw fog particle
+                          const gradient = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+                          gradient.addColorStop(0, `rgba(230, 240, 245, ${p.opacity * opacity})`);
+                          gradient.addColorStop(1, `rgba(230, 240, 245, 0)`);
+
+                          this.ctx.fillStyle = gradient;
+                          this.ctx.beginPath();
+                          this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                          this.ctx.fill();
+                          break;
+                  }
+
+                  this.ctx.restore();
+              }
+          }
+
+          // Enable automatic weather cycling
+          enableAutoCycle(duration = 30000) {
+              this.autoCycle = true;
+              this.weatherDuration = duration;
+              this.lastWeatherChange = Date.now();
+              console.log(`Auto weather cycling enabled (${duration / 1000}s per weather)`);
+          }
+
+          // Disable automatic weather cycling
+          disableAutoCycle() {
+              this.autoCycle = false;
+              console.log("Auto weather cycling disabled");
+          }
+      }
+
+      // Background Manager Class
+      class BackgroundManager {
+          constructor(canvas, ctx) {
+              this.canvas = canvas;
+              this.ctx = ctx;
+              this.currentBackground = "dojo";
+              this.backgrounds = {
+                  // Default background
+                  dojo: {
+                      layers: [
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/dojo-bg.png", x: 0, y: 0, parallax: 0 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/dojo-floor.png", x: 0, y: 0, parallax: 0.1 },
+                      ],
+                      floorY: 50,
+                      skyColor: "#1a2a3a",
+                      floorColor: "#554433",
+                  },
+                  // Mountain background
+                  mountain: {
+                      layers: [
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-sky.png", x: 0, y: 0, parallax: 0 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-far.png", x: 0, y: 0, parallax: 0.1 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-mid.png", x: 0, y: 0, parallax: 0.2 },
+                          {
+                              image: null,
+                              src: "/Stickman-Fighter-v2/assets/backgrounds/mountain-ground.png",
+                              x: 0,
+                              y: 0,
+                              parallax: 0.3,
+                          },
+                      ],
+                      floorY: 50,
+                      skyColor: "#4a6a8a",
+                      floorColor: "#5d4b35",
+                  },
+                  // City background
+                  city: {
+                      layers: [
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-sky.png", x: 0, y: 0, parallax: 0 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-buildings.png", x: 0, y: 0, parallax: 0.1 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/city-street.png", x: 0, y: 0, parallax: 0.3 },
+                      ],
+                      floorY: 50,
+                      skyColor: "#3a4a5a",
+                      floorColor: "#333333",
+                  },
+                  // Beach background
+                  beach: {
+                      layers: [
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-sky.png", x: 0, y: 0, parallax: 0 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-ocean.png", x: 0, y: 0, parallax: 0.05 },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/beach-sand.png", x: 0, y: 0, parallax: 0.2 },
+                      ],
+                      floorY: 50,
+                      skyColor: "#87ceeb",
+                      floorColor: "#f5deb3",
+                  },
+                  // Night forest background
+                  forest: {
+                      layers: [
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/forest-sky.png", x: 0, y: 0, parallax: 0 },
+                          {
+                              image: null,
+                              src: "/Stickman-Fighter-v2/assets/backgrounds/forest-trees-far.png",
+                              x: 0,
+                              y: 0,
+                              parallax: 0.1,
+                          },
+                          {
+                              image: null,
+                              src: "/Stickman-Fighter-v2/assets/backgrounds/forest-trees-near.png",
+                              x: 0,
+                              y: 0,
+                              parallax: 0.2,
+                          },
+                          { image: null, src: "/Stickman-Fighter-v2/assets/backgrounds/forest-ground.png", x: 0, y: 0, parallax: 0.3 },
+                      ],
+                      floorY: 50,
+                      skyColor: "#0a1a2a",
+                      floorColor: "#2a1a0a",
+                  },
+              };
+
+              // Transition properties
+              this.transitioning = false;
+              this.transitionProgress = 0;
+              this.transitionSpeed = 0.02;
+              this.transitionTarget = "";
+
+              // Background animation properties
+              this.animationOffset = 0;
+              this.animationSpeed = 0.2;
+              this.parallaxOffset = 0;
+
+              // Time of day effect
+              this.timeOfDay = "day"; // day, sunset, night, dawn
+              this.timeOverlay = 0;
+              this.timeColor = "rgba(0, 0, 0, 0)";
+
+              // Auto cycle properties
+              this.autoCycle = false;
+              this.cycleDuration = 60000; // 60 seconds per background
+              this.lastCycleTime = Date.now();
+              this.availableBackgrounds = Object.keys(this.backgrounds);
+
+              // Placeholder images until real assets are loaded
+              this.placeholderImages = {};
+          }
+
+          // Initialize the background manager
+          async init() {
+              // Create placeholder images for backgrounds
+              await this.createPlaceholders();
+
+              // Load the current background
+              await this.loadBackground(this.currentBackground);
+
+              console.log("Background manager initialized");
+          }
+
+          // Create placeholder images for backgrounds
+          async createPlaceholders() {
+              // For each background type
+              for (const [bgName, bg] of Object.entries(this.backgrounds)) {
+                  this.placeholderImages[bgName] = [];
+
+                  // For each layer in the background
+                  for (let i = 0; i < bg.layers.length; i++) {
+                      // Create a placeholder canvas
+                      const placeholderCanvas = document.createElement("canvas");
+                      placeholderCanvas.width = this.canvas.width;
+                      placeholderCanvas.height = this.canvas.height;
+                      const placeholderCtx = placeholderCanvas.getContext("2d");
+
+                      // Draw a gradient background
+                      const gradient = placeholderCtx.createLinearGradient(0, 0, 0, placeholderCanvas.height);
+
+                      // Different colors based on layer index and background type
+                      if (i === 0) {
+                          // Sky layer
+                          gradient.addColorStop(0, bg.skyColor);
+                          gradient.addColorStop(1, this.lightenColor(bg.skyColor, 30));
+                      } else if (i === bg.layers.length - 1) {
+                          // Ground/floor layer
+                          gradient.addColorStop(0, this.darkenColor(bg.floorColor, 20));
+                          gradient.addColorStop(1, bg.floorColor);
+                      } else {
+                          // Middle layers
+                          const midColor = this.blendColors(bg.skyColor, bg.floorColor, i / bg.layers.length);
+                          gradient.addColorStop(0, this.lightenColor(midColor, 10));
+                          gradient.addColorStop(1, this.darkenColor(midColor, 10));
+                      }
+
+                      placeholderCtx.fillStyle = gradient;
+                      placeholderCtx.fillRect(0, 0, placeholderCanvas.width, placeholderCanvas.height);
+
+                      // Add some random elements based on background type
+                      placeholderCtx.fillStyle = "rgba(255, 255, 255, 0.1)";
+
+                      if (bgName === "mountain") {
+                          // Draw mountain silhouettes
+                          this.drawMountainSilhouette(placeholderCtx, i);
+                      } else if (bgName === "city") {
+                          // Draw building silhouettes
+                          this.drawCitySilhouette(placeholderCtx, i);
+                      } else if (bgName === "beach") {
+                          // Draw waves or palm trees
+                          this.drawBeachElements(placeholderCtx, i);
+                      } else if (bgName === "forest") {
+                          // Draw tree silhouettes
+                          this.drawForestSilhouette(placeholderCtx, i);
+                      }
+
+                      // Store the placeholder image
+                      this.placeholderImages[bgName].push(placeholderCanvas);
+                  }
+              }
+          }
+
+          // Helper method to draw mountain silhouettes
+          drawMountainSilhouette(ctx, layerIndex) {
+              if (layerIndex === 0) return; // Skip sky layer
+
+              ctx.fillStyle = "rgba(0, 0, 0, 0.2)";
+
+              const height = ctx.canvas.height;
+              const width = ctx.canvas.width;
+
+              // Draw a series of mountain peaks
+              ctx.beginPath();
+              ctx.moveTo(0, height);
+
+              const peaks = 3 + layerIndex * 2;
+              const peakWidth = width / peaks;
+
+              for (let i = 0; i <= peaks; i++) {
+                  const x = i * peakWidth;
+                  const peakHeight = 50 + Math.random() * 100;
+
+                  if (i === 0) {
+                      ctx.lineTo(x, height - peakHeight / 2);
+                  } else {
+                      ctx.lineTo(x - peakWidth / 3, height - peakHeight / 3);
+                      ctx.lineTo(x, height - peakHeight);
+                      ctx.lineTo(x + peakWidth / 3, height - peakHeight / 3);
+                  }
+              }
+
+              ctx.lineTo(width, height);
+              ctx.closePath();
+              ctx.fill();
+          }
+
+          // Helper method to draw city silhouettes
+          drawCitySilhouette(ctx, layerIndex) {
+              if (layerIndex === 0) return; // Skip sky layer
+
+              ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+
+              const height = ctx.canvas.height;
+              const width = ctx.canvas.width;
+
+              // Draw a series of buildings
+              ctx.beginPath();
+              ctx.moveTo(0, height);
+
+              const buildings = 10 + layerIndex * 5;
+              const buildingWidth = width / buildings;
+
+              for (let i = 0; i < buildings; i++) {
+                  const x = i * buildingWidth;
+                  const buildingHeight = 30 + Math.random() * 150;
+
+                  ctx.lineTo(x, height - buildingHeight);
+                  ctx.lineTo(x, height - buildingHeight);
+                  ctx.lineTo(x + buildingWidth, height - buildingHeight);
+                  ctx.lineTo(x + buildingWidth, height);
+              }
+
+              ctx.closePath();
+              ctx.fill();
+          }
+
+          // Helper method to draw beach elements
+          drawBeachElements(ctx, layerIndex) {
+              const height = ctx.canvas.height;
+              const width = ctx.canvas.width;
+
+              if (layerIndex === 1) {
+                  // Draw ocean waves
+                  ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+
+                  for (let i = 0; i < 5; i++) {
+                      const y = height / 2 + i * 20;
+
+                      ctx.beginPath();
+                      ctx.moveTo(0, y);
+
+                      for (let x = 0; x < width; x += 20) {
+                          ctx.quadraticCurveTo(x + 10, y - 5 - Math.random() * 5, x + 20, y);
+                      }
+
+                      ctx.lineTo(width, height);
+                      ctx.lineTo(0, height);
+                      ctx.closePath();
+                      ctx.fill();
+                  }
+              } else if (layerIndex === 2) {
+                  // Draw palm trees
+                  ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+
+                  for (let i = 0; i < 3; i++) {
+                      const x = width * (0.2 + i * 0.3);
+                      const trunkHeight = 100 + Math.random() * 50;
+
+                      // Draw trunk
+                      ctx.beginPath();
+                      ctx.moveTo(x - 5, height);
+                      ctx.lineTo(x - 5, height - trunkHeight);
+                      ctx.lineTo(x + 5, height - trunkHeight);
+                      ctx.lineTo(x + 5, height);
+                      ctx.closePath();
+                      ctx.fill();
+
+                      // Draw palm leaves
+                      ctx.beginPath();
+                      for (let j = 0; j < 5; j++) {
+                          const angle = (Math.PI / 5) * j;
+                          const leafLength = 30 + Math.random() * 20;
+
+                          ctx.moveTo(x, height - trunkHeight);
+                          ctx.quadraticCurveTo(
+                              x + Math.cos(angle) * leafLength * 0.6,
+                              height - trunkHeight - Math.sin(angle) * leafLength * 0.6,
+                              x + Math.cos(angle) * leafLength,
+                              height - trunkHeight - Math.sin(angle) * leafLength
+                          );
+                      }
+                      ctx.stroke();
+                  }
+              }
+          }
+
+          // Helper method to draw forest silhouettes
+          drawForestSilhouette(ctx, layerIndex) {
+              if (layerIndex === 0) return; // Skip sky layer
+
+              const height = ctx.canvas.height;
+              const width = ctx.canvas.width;
+
+              // Draw trees
+              ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+
+              const trees = 5 + layerIndex * 3;
+              const treeSpacing = width / trees;
+
+              for (let i = 0; i < trees; i++) {
+                  const x = (i + 0.5) * treeSpacing;
+                  const treeHeight = 80 + Math.random() * 120;
+
+                  // Draw tree trunk
+                  ctx.fillRect(x - 5, height - treeHeight, 10, treeHeight);
+
+                  // Draw tree crown
+                  ctx.beginPath();
+                  ctx.arc(x, height - treeHeight, 30 + Math.random() * 20, 0, Math.PI * 2);
+                  ctx.fill();
+              }
+          }
+
+          // Helper method to lighten a color
+          lightenColor(color, amount) {
+              return this.adjustColor(color, amount);
+          }
+
+          // Helper method to darken a color
+          darkenColor(color, amount) {
+              return this.adjustColor(color, -amount);
+          }
+
+          // Helper method to adjust a color's brightness
+          adjustColor(color, amount) {
+              // Convert hex to rgb
+              let r, g, b;
+
+              if (color.startsWith("#")) {
+                  const hex = color.substring(1);
+                  r = parseInt(hex.substr(0, 2), 16);
+                  g = parseInt(hex.substr(2, 2), 16);
+                  b = parseInt(hex.substr(4, 2), 16);
+              } else if (color.startsWith("rgb")) {
+                  const match = color.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+                  if (match) {
+                      r = parseInt(match[1]);
+                      g = parseInt(match[2]);
+                      b = parseInt(match[3]);
+                  } else {
+                      return color;
+                  }
+              } else {
+                  return color;
+              }
+
+              // Adjust brightness
+              r = Math.max(0, Math.min(255, r + amount));
+              g = Math.max(0, Math.min(255, g + amount));
+              b = Math.max(0, Math.min(255, b + amount));
+
+              return `rgb(${r}, ${g}, ${b})`;
+          }
+
+          // Helper method to blend two colors
+          blendColors(color1, color2, ratio) {
+              // Convert colors to rgb
+              let r1, g1, b1, r2, g2, b2;
+
+              // Parse color1
+              if (color1.startsWith("#")) {
+                  const hex = color1.substring(1);
+                  r1 = parseInt(hex.substr(0, 2), 16);
+                  g1 = parseInt(hex.substr(2, 2), 16);
+                  b1 = parseInt(hex.substr(4, 2), 16);
+              } else if (color1.startsWith("rgb")) {
+                  const match = color1.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+                  if (match) {
+                      r1 = parseInt(match[1]);
+                      g1 = parseInt(match[2]);
+                      b1 = parseInt(match[3]);
+                  } else {
+                      return color1;
+                  }
+              } else {
+                  return color1;
+              }
+
+              // Parse color2
+              if (color2.startsWith("#")) {
+                  const hex = color2.substring(1);
+                  r2 = parseInt(hex.substr(0, 2), 16);
+                  g2 = parseInt(hex.substr(2, 2), 16);
+                  b2 = parseInt(hex.substr(4, 2), 16);
+              } else if (color2.startsWith("rgb")) {
+                  const match = color2.match(/rgba?$$(\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?$$/);
+                  if (match) {
+                      r2 = parseInt(match[1]);
+                      g2 = parseInt(match[2]);
+                      b2 = parseInt(match[3]);
+                  } else {
+                      return color2;
+                  }
+              } else {
+                  return color2;
+              }
+
+              // Blend colors
+              const r = Math.round(r1 * (1 - ratio) + r2 * ratio);
+              const g = Math.round(g1 * (1 - ratio) + g2 * ratio);
+              const b = Math.round(b1 * (1 - ratio) + b2 * ratio);
+
+              return `rgb(${r}, ${g}, ${b})`;
+          }
+
+          // Load a background by name
+          async loadBackground(name) {
+              if (!this.backgrounds[name]) {
+                  console.error(`Background "${name}" not found`);
+                  return false;
+              }
+
+              const bg = this.backgrounds[name];
+
+              // Load all layer images
+              const promises = bg.layers.map((layer, index) => {
+                  return new Promise((resolve) => {
+                      if (layer.image) {
+                          // Image already loaded
+                          resolve();
+                          return;
+                      }
+
+                      // Create a new image
+                      const img = new Image();
+
+                      // Set up load handler
+                      img.onload = () => {
+                          layer.image = img;
+                          resolve();
+                      };
+
+                      // Set up error handler
+                      img.onerror = () => {
+                          console.warn(`Failed to load background image: ${layer.src}`);
+                          // Use placeholder instead
+                          layer.image = this.placeholderImages[name][index];
+                          resolve();
+                      };
+
+                      // Set crossOrigin to avoid CORS issues
+                      img.crossOrigin = "anonymous";
+
+                      // Start loading
+                      img.src = layer.src;
+                  });
+              });
+
+              try {
+                  await Promise.all(promises);
+                  console.log(`Background "${name}" loaded`);
+                  return true;
+              } catch (error) {
+                  console.error(`Error loading background "${name}":`, error);
+                  return false;
+              }
+          }
+
+          // Set the current background with optional transition
+          async setBackground(name, transition = true) {
+              if (!this.backgrounds[name]) {
+                  console.error(`Background "${name}" not found`);
+                  return false;
+              }
+
+              // Don't transition to the same background
+              if (name === this.currentBackground && !this.transitioning) {
+                  return true;
+              }
+
+              // Load the background first
+              const loaded = await this.loadBackground(name);
+              if (!loaded) return false;
+
+              if (transition) {
+                  // Start transition
+                  this.transitioning = true;
+                  this.transitionProgress = 0;
+                  this.transitionTarget = name;
+              } else {
+                  // Immediately set background
+                  this.currentBackground = name;
+              }
+
+              return true;
+          }
+
+          // Set time of day effect
+          setTimeOfDay(time) {
+              this.timeOfDay = time;
+
+              switch (time) {
+                  case "day":
+                      this.timeOverlay = 0;
+                      this.timeColor = "rgba(0, 0, 0, 0)";
+                      break;
+
+                  case "sunset":
+                      this.timeOverlay = 0.3;
+                      this.timeColor = "rgba(255, 150, 50, 0.3)";
+                      break;
+
+                  case "night":
+                      this.timeOverlay = 0.5;
+                      this.timeColor = "
+
+```html file="index-fixed.html"
+[v0-no-op-code-block-prefix]<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman Fighter</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #333;
+        }
+        #loadingMessage {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+        #controlPanel {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            z-index: 100;
+        }
+        .control-group {
+            margin-bottom: 10px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        button {
+            margin: 2px;
+            padding: 5px 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .toggle-btn {
+            display: inline-block;
+            position: relative;
+            width: 60px;
+            height: 30px;
+        }
+        .toggle-btn input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 30px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #2196F3;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+    </style>
+</head>
+<body>
+    <div id="controlPanel">
+        <div class="control-group">
+            <label>Background:</label>
+            <button id="bgForest">Forest</button>
+            <button id="bgMountain">Mountain</button>
+            <button id="bgDesert">Desert</button>
+            <button id="bgCity">City</button>
+        </div>
+        <div class="control-group">
+            <label>Weather:</label>
+            <button id="weatherClear">Clear</button>
+            <button id="weatherRain">Rain</button>
+            <button id="weatherSnow">Snow</button>
+            <button id="weatherThunder">Thunder</button>
+        </div>
+        <div class="control-group">
+            <label>Time of Day:</label>
+            <button id="timeMorning">Morning</button>
+            <button id="timeNoon">Noon</button>
+            <button id="timeEvening">Evening</button>
+            <button id="timeNight">Night</button>
+        </div>
+        <div class="control-group">
+            <label>Auto-cycle backgrounds:</label>
+            <label class="toggle-btn">
+                <input type="checkbox" id="autoCycleBackgrounds">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+        <div class="control-group">
+            <label>Auto-cycle weather:</label>
+            <label class="toggle-btn">
+                <input type="checkbox" id="autoCycleWeather">
+                <span class="toggle-slider"></span>
+            </label>
+        </div>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="loadingMessage">Connecting to server...</div>
+
+    <script>
+        // Background Manager
+        class BackgroundManager {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.backgrounds = {
+                    forest: { name: 'Forest', color: '#228B22' },
+                    mountain: { name: 'Mountain', color: '#708090' },
+                    desert: { name: 'Desert', color: '#F4A460' },
+                    city: { name: 'City', color: '#4682B4' }
+                };
+                this.timeOfDay = {
+                    morning: { name: 'Morning', overlay: 'rgba(255, 200, 100, 0.2)' },
+                    noon: { name: 'Noon', overlay: 'rgba(255, 255, 255, 0)' },
+                    evening: { name: 'Evening', overlay: 'rgba(255, 150, 100, 0.3)' },
+                    night: { name: 'Night', overlay: 'rgba(0, 0, 50, 0.5)' }
+                };
+                this.currentBackground = 'forest';
+                this.currentTimeOfDay = 'noon';
+                this.autoCycle = false;
+                this.lastCycleTime = 0;
+                this.cycleDuration = 10000; // 10 seconds
+            }
+
+            setBackground(backgroundKey) {
+                if (this.backgrounds[backgroundKey]) {
+                    this.currentBackground = backgroundKey;
+                }
+            }
+
+            setTimeOfDay(timeKey) {
+                if (this.timeOfDay[timeKey]) {
+                    this.currentTimeOfDay = timeKey;
+                }
+            }
+
+            toggleAutoCycle(enabled) {
+                this.autoCycle = enabled;
+                this.lastCycleTime = Date.now();
+            }
+
+            update() {
+                if (this.autoCycle && Date.now() - this.lastCycleTime > this.cycleDuration) {
+                    const backgroundKeys = Object.keys(this.backgrounds);
+                    const currentIndex = backgroundKeys.indexOf(this.currentBackground);
+                    const nextIndex = (currentIndex + 1) % backgroundKeys.length;
+                    this.currentBackground = backgroundKeys[nextIndex];
+                    this.lastCycleTime = Date.now();
+                }
+            }
+
+            draw() {
+                // Draw background
+                const background = this.backgrounds[this.currentBackground];
+                this.ctx.fillStyle = background.color;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Draw time of day overlay
+                const timeOverlay = this.timeOfDay[this.currentTimeOfDay].overlay;
+                this.ctx.fillStyle = timeOverlay;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            }
+        }
+
+        // Weather System
+        class WeatherSystem {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.weatherTypes = ['clear', 'rain', 'snow', 'thunder'];
+                this.currentWeather = 'clear';
+                this.particles = [];
+                this.maxParticles = 100;
+                this.thunderFlash = false;
+                this.thunderTimer = 0;
+                this.autoCycle = false;
+                this.lastCycleTime = 0;
+                this.cycleDuration = 15000; // 15 seconds
+            }
+
+            setWeather(weatherType) {
+                if (this.weatherTypes.includes(weatherType)) {
+                    this.currentWeather = weatherType;
+                    this.particles = [];
+                    if (weatherType !== 'clear') {
+                        this.initParticles();
+                    }
+                }
+            }
+
+            toggleAutoCycle(enabled) {
+                this.autoCycle = enabled;
+                this.lastCycleTime = Date.now();
+            }
+
+            initParticles() {
+                this.particles = [];
+                for (let i = 0; i < this.maxParticles; i++) {
+                    this.particles.push(this.createParticle());
+                }
+            }
+
+            createParticle() {
+                const x = Math.random() * this.canvas.width;
+                const y = Math.random() * this.canvas.height - this.canvas.height;
+                const size = Math.random() * 3 + 1;
+                const speed = Math.random() * 5 + 2;
+                
+                if (this.currentWeather === 'rain') {
+                    return {
+                        x, y, size, speed,
+                        color: 'rgba(120, 180, 255, 0.8)',
+                        angle: Math.PI / 6
+                    };
+                } else if (this.currentWeather === 'snow') {
+                    return {
+                        x, y, size: size * 2, speed: speed / 2,
+                        color: 'rgba(255, 255, 255, 0.8)',
+                        angle: 0,
+                        drift: Math.random() * 2 - 1
+                    };
+                }
+                return { x, y, size, speed, color: 'white' };
+            }
+
+            update() {
+                if (this.autoCycle && Date.now() - this.lastCycleTime > this.cycleDuration) {
+                    const currentIndex = this.weatherTypes.indexOf(this.currentWeather);
+                    const nextIndex = (currentIndex + 1) % this.weatherTypes.length;
+                    this.setWeather(this.weatherTypes[nextIndex]);
+                    this.lastCycleTime = Date.now();
+                }
+
+                if (this.currentWeather === 'clear') {
+                    return;
+                }
+
+                // Update particles
+                for (let i = 0; i < this.particles.length; i++) {
+                    const p = this.particles[i];
+                    
+                    if (this.currentWeather === 'rain') {
+                        p.x -= p.speed * Math.sin(p.angle);
+                        p.y += p.speed * Math.cos(p.angle);
+                    } else if (this.currentWeather === 'snow') {
+                        p.x += p.drift;
+                        p.y += p.speed;
+                    }
+                    
+                    // Reset particles that go off screen
+                    if (p.y > this.canvas.height) {
+                        if (this.currentWeather === 'rain') {
+                            p.x = Math.random() * this.canvas.width;
+                            p.y = -10;
+                        } else if (this.currentWeather === 'snow') {
+                            p.x = Math.random() * this.canvas.width;
+                            p.y = -10;
+                            p.drift = Math.random() * 2 - 1;
+                        }
+                    }
+                }
+
+                // Handle thunder
+                if (this.currentWeather === 'thunder') {
+                    this.thunderTimer--;
+                    if (this.thunderTimer <= 0) {
+                        if (Math.random() < 0.03) {
+                            this.thunderFlash = true;
+                            this.thunderTimer = 5;
+                            // Play thunder sound if available
+                            // if (this.thunderSound) this.thunderSound.play();
+                        }
+                    } else {
+                        this.thunderFlash = false;
+                    }
+                }
+            }
+
+            draw() {
+                if (this.currentWeather === 'clear') {
+                    return;
+                }
+
+                // Draw thunder flash
+                if (this.currentWeather === 'thunder' && this.thunderFlash) {
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                }
+
+                // Draw particles
+                for (let i = 0; i < this.particles.length; i++) {
+                    const p = this.particles[i];
+                    this.ctx.fillStyle = p.color;
+                    
+                    if (this.currentWeather === 'rain') {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(p.x, p.y);
+                        this.ctx.lineTo(p.x - p.size * Math.sin(p.angle), p.y + p.size * Math.cos(p.angle));
+                        this.ctx.stroke();
+                    } else if (this.currentWeather === 'snow') {
+                        this.ctx.beginPath();
+                        this.ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                }
+            }
+        }
+
+        // Game initialization
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const loadingMessage = document.getElementById('loadingMessage');
+        
+        // Initialize background and weather systems
+        const backgroundManager = new BackgroundManager(canvas);
+        const weatherSystem = new WeatherSystem(canvas);
+
+        // Game state
+        let gameState = {
+            players: [],
+            platforms: [],
+            gameStarted: false,
+            localPlayerId: null,
+            winner: null
+        };
+
+        // Player class
+        class Player {
+            constructor(id, x, y, color) {
+                this.id = id;
+                this.x = x;
+                this.y = y;
+                this.width = 20;
+                this.height = 50;
+                this.color = color;
+                this.velocityX = 0;
+                this.velocityY = 0;
+                this.isJumping = false;
+                this.health = 100;
+                this.direction = 1; // 1 for right, -1 for left
+                this.isAttacking = false;
+                this.attackCooldown = 0;
+                this.attackBox = {
+                    width: 40,
+                    height: 20,
+                    offsetX: 20,
+                    offsetY: 15
+                };
+            }
+
+            update() {
+                // Apply gravity
+                this.velocityY += 0.5;
+                
+                // Update position
+                this.x += this.velocityX;
+                this.y += this.velocityY;
+                
+                // Check for platform collisions
+                let onGround = false;
+                for (const platform of gameState.platforms) {
+                    if (this.y + this.height >= platform.y && 
+                        this.y + this.height <= platform.y + 10 &&
+                        this.x + this.width > platform.x && 
+                        this.x < platform.x + platform.width) {
+                        this.y = platform.y - this.height;
+                        this.velocityY = 0;
+                        onGround = true;
+                        this.isJumping = false;
+                    }
+                }
+                
+                // Check canvas boundaries
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.y + this.height > canvas.height) {
+                    this.y = canvas.height - this.height;
+                    this.velocityY = 0;
+                    onGround = true;
+                    this.isJumping = false;
+                }
+                
+                // Update attack cooldown
+                if (this.attackCooldown > 0) {
+                    this.attackCooldown--;
+                } else {
+                    this.isAttacking = false;
+                }
+            }
+
+            draw() {
+                // Draw player body
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Draw head
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y - 10, 10, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Draw attack box if attacking
+                if (this.isAttacking) {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    const attackX = this.direction > 0 ? this.x + this.attackBox.offsetX : this.x - this.attackBox.width;
+                    ctx.fillRect(attackX, this.y + this.attackBox.offsetY, this.attackBox.width, this.attackBox.height);
+                }
+                
+                // Draw health bar
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x, this.y - 30, this.width, 5);
+                ctx.fillStyle = 'green';
+                ctx.fillRect(this.x, this.y - 30, this.width * (this.health / 100), 5);
+            }
+
+            attack() {
+                if (this.attackCooldown <= 0) {
+                    this.isAttacking = true;
+                    this.attackCooldown = 20;
+                    
+                    // Check for hit on other players
+                    for (const player of gameState.players) {
+                        if (player.id !== this.id) {
+                            const attackX = this.direction > 0 ? this.x + this.attackBox.offsetX : this.x - this.attackBox.width;
+                            if (attackX < player.x + player.width &&
+                                attackX + this.attackBox.width > player.x &&
+                                this.y + this.attackBox.offsetY < player.y + player.height &&
+                                this.y + this.attackBox.offsetY + this.attackBox.height > player.y) {
+                                player.health -= 10;
+                                if (player.health <= 0) {
+                                    gameState.winner = this.id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Initialize game
+        function initGame() {
+            // Create platforms
+            gameState.platforms = [
+                { x: 100, y: 500, width: 200, height: 20 },
+                { x: 500, y: 400, width: 200, height: 20 },
+                { x: 300, y: 300, width: 200, height: 20 }
+            ];
+            
+            // Create players
+            const player1 = new Player('player1', 100, 100, 'blue');
+            const player2 = new Player('player2', 700, 100, 'red');
+            gameState.players = [player1, player2];
+            gameState.localPlayerId = 'player1';
+            
+            // Hide loading message
+            loadingMessage.style.display = 'none';
+            
+            // Start game
+            gameState.gameStarted = true;
+            gameLoop();
+        }
+
+        // Game loop
+        function gameLoop() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Update background and weather
+            backgroundManager.update();
+            weatherSystem.update();
+            
+            // Draw background
+            backgroundManager.draw();
+            
+            // Update and draw platforms
+            for (const platform of gameState.platforms) {
+                ctx.fillStyle = '#555';
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            }
+            
+            // Update and draw players
+            for (const player of gameState.players) {
+                player.update();
+                player.draw();
+            }
+            
+            // Draw weather effects
+            weatherSystem.draw();
+            
+            // Check for winner
+            if (gameState.winner) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                const winnerColor = gameState.players.find(p => p.id === gameState.winner).color;
+                ctx.fillText(`${winnerColor.toUpperCase()} WINS!`, canvas.width / 2, canvas.height / 2);
+                ctx.font = '24px Arial';
+                ctx.fillText('Press SPACE to restart', canvas.width / 2, canvas.height / 2 + 50);
+                return;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Input handling
+        const keys = {};
+        
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            
+            // Handle restart on game over
+            if (e.code === 'Space' && gameState.winner) {
+                gameState.winner = null;
+                for (const player of gameState.players) {
+                    player.health = 100;
+                    player.x = player.id === 'player1' ? 100 : 700;
+                    player.y = 100;
+                    player.velocityX = 0;
+                    player.velocityY = 0;
+                }
+                gameLoop();
+            }
+            
+            // Handle player movement and actions
+            if (gameState.gameStarted && !gameState.winner) {
+                const player = gameState.players.find(p => p.id === gameState.localPlayerId);
+                
+                if (e.code === 'KeyA') {
+                    player.velocityX = -5;
+                    player.direction = -1;
+                }
+                if (e.code === 'KeyD') {
+                    player.velocityX = 5;
+                    player.direction = 1;
+                }
+                if (e.code === 'KeyW' && !player.isJumping) {
+                    player.velocityY = -12;
+                    player.isJumping = true;
+                }
+                if (e.code === 'Space') {
+                    player.attack();
+                }
+                
+                // AI control for player 2
+                const ai = gameState.players.find(p => p.id !== gameState.localPlayerId);
+                if (Math.random() < 0.02) {
+                    ai.velocityX = Math.random() > 0.5 ? 5 : -5;
+                    ai.direction = ai.velocityX > 0 ? 1 : -1;
+                }
+                if (Math.random() < 0.01 && !ai.isJumping) {
+                    ai.velocityY = -12;
+                    ai.isJumping = true;
+                }
+                if (Math.random() < 0.02) {
+                    ai.attack();
+                }
+            }
+        });
+        
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            
+            // Handle player movement
+            if (gameState.gameStarted) {
+                const player = gameState.players.find(p => p.id === gameState.localPlayerId);
+                
+                if (e.code === 'KeyA' && player.velocityX < 0) {
+                    player.velocityX = 0;
+                }
+                if (e.code === 'KeyD' && player.velocityX > 0) {
+                    player.velocityX = 0;
+                }
+            }
+        });
+
+        // Control panel event listeners
+        document.getElementById('bgForest').addEventListener('click', () => backgroundManager.setBackground('forest'));
+        document.getElementById('bgMountain').addEventListener('click', () => backgroundManager.setBackground('mountain'));
+        document.getElementById('bgDesert').addEventListener('click', () => backgroundManager.setBackground('desert'));
+        document.getElementById('bgCity').addEventListener('click', () => backgroundManager.setBackground('city'));
+        
+        document.getElementById('weatherClear').addEventListener('click', () => weatherSystem.setWeather('clear'));
+        document.getElementById('weatherRain').addEventListener('click', () => weatherSystem.setWeather('rain'));
+        document.getElementById('weatherSnow').addEventListener('click', () => weatherSystem.setWeather('snow'));
+        document.getElementById('weatherThunder').addEventListener('click', () => weatherSystem.setWeather('thunder'));
+        
+        document.getElementById('timeMorning').addEventListener('click', () => backgroundManager.setTimeOfDay('morning'));
+        document.getElementById('timeNoon').addEventListener('click', () => backgroundManager.setTimeOfDay('noon'));
+        document.getElementById('timeEvening').addEventListener('click', () => backgroundManager.setTimeOfDay('evening'));
+        document.getElementById('timeNight').addEventListener('click', () => backgroundManager.setTimeOfDay('night'));
+        
+        document.getElementById('autoCycleBackgrounds').addEventListener('change', (e) => {
+            backgroundManager.toggleAutoCycle(e.target.checked);
+        });
+        
+        document.getElementById('autoCycleWeather').addEventListener('change', (e) => {
+            weatherSystem.toggleAutoCycle(e.target.checked);
+        });
+
+        // Start the game after a short delay
+        setTimeout(initGame, 1000);
+    </script>
+</body>
+</html>
