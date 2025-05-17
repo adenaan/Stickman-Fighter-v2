@@ -255,6 +255,44 @@
           justify-content: center;
           font-size: 20px;
       }
+      /* Weather and background controls */
+      #visualControls {
+          position: fixed;
+          top: 10px;
+          left: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          z-index: 30;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          font-size: 12px;
+      }
+      .visual-control-btn {
+          padding: 3px 6px;
+          background-color: rgba(255, 255, 255, 0.2);
+          border: none;
+          border-radius: 3px;
+          color: white;
+          cursor: pointer;
+          transition: all 0.1s ease;
+      }
+      .visual-control-btn:hover {
+          background-color: rgba(255, 255, 255, 0.3);
+      }
+      .visual-control-btn.active {
+          background-color: rgba(100, 200, 100, 0.5);
+      }
+      .visual-control-group {
+          margin-bottom: 5px;
+      }
+      .visual-control-label {
+          margin-bottom: 3px;
+          font-weight: bold;
+      }
   </style>
 </head>
 <body>
@@ -262,6 +300,37 @@
       <div id="playerIndicator"></div>
       <div id="debugInfo"></div>
       <div id="soundControl">🔊</div>
+      
+      <div id="visualControls">
+          <div class="visual-control-group">
+              <div class="visual-control-label">Background</div>
+              <button class="visual-control-btn" data-bg="dojo">Dojo</button>
+              <button class="visual-control-btn" data-bg="mountain">Mountain</button>
+              <button class="visual-control-btn" data-bg="city">City</button>
+              <button class="visual-control-btn" data-bg="beach">Beach</button>
+              <button class="visual-control-btn" data-bg="forest">Forest</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Weather</div>
+              <button class="visual-control-btn" data-weather="none">Clear</button>
+              <button class="visual-control-btn" data-weather="rain">Rain</button>
+              <button class="visual-control-btn" data-weather="snow">Snow</button>
+              <button class="visual-control-btn" data-weather="storm">Storm</button>
+              <button class="visual-control-btn" data-weather="fog">Fog</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Time</div>
+              <button class="visual-control-btn" data-time="day">Day</button>
+              <button class="visual-control-btn" data-time="sunset">Sunset</button>
+              <button class="visual-control-btn" data-time="night">Night</button>
+              <button class="visual-control-btn" data-time="dawn">Dawn</button>
+          </div>
+          <div class="visual-control-group">
+              <div class="visual-control-label">Auto Cycle</div>
+              <button class="visual-control-btn" id="toggleBgCycle">BG: Off</button>
+              <button class="visual-control-btn" id="toggleWeatherCycle">Weather: Off</button>
+          </div>
+      </div>
       
       <div id="gameArea">
           <canvas id="gameCanvas"></canvas>
@@ -376,6 +445,10 @@
               defeatFall: 0
           }
       };
+
+      // Weather and background systems
+      let weatherSystem;
+      let backgroundManager;
       
       // Debug function
       function debug(message) {
@@ -400,6 +473,12 @@
           // Set up sound control
           setupSoundControl();
           
+          // Initialize visual systems (weather and background)
+          initializeVisualSystems();
+          
+          // Set up visual controls
+          setupVisualControls();
+          
           // Connect to server automatically
           connectToServer();
           
@@ -419,7 +498,8 @@
               hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
               victory: '/Stickman-Fighter-v2/assets/victory.mp3',
               gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              button: '/Stickman-Fighter-v2/assets/button-press.mp3',
+              thunder: '/Stickman-Fighter-v2/assets/thunder.mp3'
           };
           
           let loadedCount = 0;
@@ -494,6 +574,131 @@
           
           canvas.width = gameWidth;
           canvas.height = gameHeight;
+      }
+
+      // Initialize weather and background systems
+      function initializeVisualSystems() {
+          // Initialize weather system
+          weatherSystem = new WeatherSystem(canvas, ctx);
+          weatherSystem.init();
+
+          // Initialize background manager
+          backgroundManager = new BackgroundManager(canvas, ctx);
+          backgroundManager.init().then(() => {
+              console.log("Background manager ready");
+              
+              // Start with a random background
+              const backgrounds = ["dojo", "mountain", "city", "beach", "forest"];
+              const randomBg = backgrounds[Math.floor(Math.random() * backgrounds.length)];
+              backgroundManager.setBackground(randomBg, false);
+          });
+
+          // Make playSound function available to weather system
+          window.playSound = playSound;
+          window.soundEnabled = soundEnabled;
+      }
+
+      // Set up visual controls
+      function setupVisualControls() {
+          // Background buttons
+          document.querySelectorAll('.visual-control-btn[data-bg]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const bg = this.getAttribute('data-bg');
+                  if (backgroundManager) {
+                      backgroundManager.setBackground(bg);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-bg]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Weather buttons
+          document.querySelectorAll('.visual-control-btn[data-weather]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const weather = this.getAttribute('data-weather');
+                  if (weatherSystem) {
+                      weatherSystem.setWeather(weather);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-weather]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Time of day buttons
+          document.querySelectorAll('.visual-control-btn[data-time]').forEach(btn => {
+              btn.addEventListener('click', function() {
+                  const time = this.getAttribute('data-time');
+                  if (backgroundManager) {
+                      backgroundManager.setTimeOfDay(time);
+                      
+                      // Update active state
+                      document.querySelectorAll('.visual-control-btn[data-time]').forEach(b => {
+                          b.classList.remove('active');
+                      });
+                      this.classList.add('active');
+                      
+                      // Play button sound
+                      playSound('button');
+                  }
+              });
+          });
+          
+          // Background auto cycle toggle
+          const toggleBgCycleBtn = document.getElementById('toggleBgCycle');
+          toggleBgCycleBtn.addEventListener('click', function() {
+              if (backgroundManager) {
+                  if (backgroundManager.autoCycle) {
+                      backgroundManager.disableAutoCycle();
+                      this.textContent = 'BG: Off';
+                      this.classList.remove('active');
+                  } else {
+                      backgroundManager.enableAutoCycle(60000); // Change every 60 seconds
+                      this.textContent = 'BG: On';
+                      this.classList.add('active');
+                  }
+                  
+                  // Play button sound
+                  playSound('button');
+              }
+          });
+          
+          // Weather auto cycle toggle
+          const toggleWeatherCycleBtn = document.getElementById('toggleWeatherCycle');
+          toggleWeatherCycleBtn.addEventListener('click', function() {
+              if (weatherSystem) {
+                  if (weatherSystem.autoCycle) {
+                      weatherSystem.disableAutoCycle();
+                      this.textContent = 'Weather: Off';
+                      this.classList.remove('active');
+                  } else {
+                      weatherSystem.enableAutoCycle(30000); // Change every 30 seconds
+                      this.textContent = 'Weather: On';
+                      this.classList.add('active');
+                  }
+                  
+                  // Play button sound
+                  playSound('button');
+              }
+          });
+          
+          // Set initial active states
+          document.querySelector('.visual-control-btn[data-bg="dojo"]').classList.add('active');
+          document.querySelector('.visual-control-btn[data-weather="none"]').classList.add('active');
+          document.querySelector('.visual-control-btn[data-time="day"]').classList.add('active');
       }
       
       function connectToServer() {
@@ -1078,17 +1283,15 @@
           // Update player animations
           updatePlayerAnimations(deltaTime);
 
-          /*
-          // Check for game ending sequence
-          if (gameEnding && gameState.winner && !winnerAnnounced) {
-              const now = performance.now();
-              if (now - gameEndTime >= GAME_END_DELAY) {
-                  // Show winner message after delay
-                  showWinner(gameState.winner);
-                  winnerAnnounced = true;
-              }
+          // Update background manager with player positions
+          if (backgroundManager) {
+              backgroundManager.update(deltaTime);
           }
-          */
+
+          // Update weather system
+          if (weatherSystem) {
+              weatherSystem.update(deltaTime);
+          }
 
           // Update hit detection (only if game is active and not ending)
           if (gameStarted && !gameEnding) {
@@ -1099,7 +1302,12 @@
           ctx.clearRect(0, 0, gameWidth, gameHeight);
           
           // Draw game elements
-          drawBackground();
+          if (backgroundManager) {
+              backgroundManager.draw(players);
+          } else {
+              // Fallback to original background if manager not ready
+              drawBackground();
+          }
 
           // Always draw players, even if game is not started
           if (players.player1 && players.player2) {
@@ -1111,6 +1319,11 @@
               drawHitFeedback();
               drawPowerBars();
               // drawHitboxes(); // Uncomment for debugging
+          }
+
+          // Draw weather effects on top of everything
+          if (weatherSystem) {
+              weatherSystem.draw();
           }
           
           // Continue the game loop
@@ -1461,584 +1674,4 @@
               ctx.fill();
               
               // Draw attack range
-              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          ctx.restore();
-      }
-      
-      function drawBackground() {
-          // Sky gradient
-          const skyGradient = ctx.createLinearGradient(0, 0, 0, gameHeight - 50);
-          skyGradient.addColorStop(0, '#1a2a3a');
-          skyGradient.addColorStop(1, '#3a4a5a');
-          ctx.fillStyle = skyGradient;
-          ctx.fillRect(0, 0, gameWidth, gameHeight - 50);
-          
-          // Draw distant mountains
-          drawMountains();
-          
-          // Floor gradient with texture
-          const floorGradient = ctx.createLinearGradient(0, gameHeight - 50, 0, gameHeight);
-          floorGradient.addColorStop(0, '#554433');
-          floorGradient.addColorStop(1, '#443322');
-          ctx.fillStyle = floorGradient;
-          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
-          
-          // Draw floor texture
-          drawFloorTexture();
-          
-          // Draw floor edge highlight
-          ctx.strokeStyle = '#665544';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 50);
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.stroke();
-          
-          // Draw some scattered rocks
-          drawRocks();
-      }
-
-      function drawMountains() {
-          ctx.fillStyle = '#2a3a4a';
-          
-          // First mountain range (far)
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 100);
-          
-          // Create a series of mountain peaks
-          const peaks = 5;
-          const peakWidth = gameWidth / peaks;
-          
-          for (let i = 0; i <= peaks; i++) {
-              const x = i * peakWidth;
-              const height = 30 + Math.random() * 40;
-              
-              if (i === 0) {
-                  ctx.lineTo(x, gameHeight - 100);
-              } else {
-                  const cpx1 = x - peakWidth * 0.7;
-                  const cpy1 = gameHeight - 100 - height * 0.3;
-                  const cpx2 = x - peakWidth * 0.3;
-                  const cpy2 = gameHeight - 100 - height * 0.7;
-                  
-                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 100 - height);
-                  
-                  const cpx3 = x + peakWidth * 0.3;
-                  const cpy3 = gameHeight - 100 - height * 0.7;
-                  const cpx4 = x + peakWidth * 0.7;
-                  const cpy4 = gameHeight - 100 - height * 0.3;
-                  
-                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth, gameHeight - 100);
-              }
-          }
-          
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.lineTo(0, gameHeight - 50);
-          ctx.closePath();
-          ctx.fill();
-          
-          // Second mountain range (closer, darker)
-          ctx.fillStyle = '#1a2a3a';
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 70);
-          
-          const peaks2 = 7;
-          const peakWidth2 = gameWidth / peaks2;
-          
-          for (let i = 0; i <= peaks2; i++) {
-              const x = i * peakWidth2;
-              const height = 20 + Math.random() * 30;
-              
-              if (i === 0) {
-                  ctx.lineTo(x, gameHeight - 70);
-              } else {
-                  const cpx1 = x - peakWidth2 * 0.7;
-                  const cpy1 = gameHeight - 70 - height * 0.3;
-                  const cpx2 = x - peakWidth2 * 0.3;
-                  const cpy2 = gameHeight - 70 - height * 0.7;
-                  
-                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 70 - height);
-                  
-                  const cpx3 = x + peakWidth2 * 0.3;
-                  const cpy3 = gameHeight - 70 - height * 0.7;
-                  const cpx4 = x + peakWidth2 * 0.7;
-                  const cpy4 = gameHeight - 70 - height * 0.3;
-                  
-                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth2, gameHeight - 70);
-              }
-          }
-          
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.lineTo(0, gameHeight - 50);
-          ctx.closePath();
-          ctx.fill();
-      }
-
-      function drawFloorTexture() {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-          ctx.lineWidth = 1;
-          
-          // Draw horizontal texture lines
-          for (let y = gameHeight - 45; y < gameHeight; y += 5) {
-              ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(gameWidth, y);
-              ctx.stroke();
-          }
-          
-          // Draw some vertical cracks
-          const cracks = 12;
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-          
-          for (let i = 0; i < cracks; i++) {
-              const x = Math.random() * gameWidth;
-              const length = 5 + Math.random() * 15;
-              const startY = gameHeight - 50 + Math.random() * 10;
-              
-              ctx.beginPath();
-              ctx.moveTo(x, startY);
-              
-              // Create a jagged line for the crack
-              let currentY = startY;
-              const segments = 3 + Math.floor(Math.random() * 3);
-              const segmentLength = length / segments;
-              
-              for (let j = 0; j < segments; j++) {
-                  const nextX = x + (Math.random() * 6 - 3);
-                  currentY += segmentLength;
-                  ctx.lineTo(nextX, currentY);
-              }
-              
-              ctx.stroke();
-          }
-      }
-
-      function drawRocks() {
-          // Draw some scattered rocks on the floor
-          const rockCount = 8 + Math.floor(gameWidth / 100);
-          
-          for (let i = 0; i < rockCount; i++) {
-              const x = Math.random() * gameWidth;
-              const y = gameHeight - 50 + Math.random() * 10;
-              const size = 2 + Math.random() * 4;
-              
-              // Don't draw rocks in the center area where players fight
-              if (x > gameWidth * 0.4 && x < gameWidth * 0.6) continue;
-              
-              ctx.fillStyle = `rgba(100, 100, 100, ${0.3 + Math.random() * 0.4})`;
-              ctx.beginPath();
-              ctx.arc(x, y, size, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Add a highlight
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-              ctx.beginPath();
-              ctx.arc(x - size * 0.3, y - size * 0.3, size * 0.4, 0, Math.PI * 2);
-              ctx.fill();
-          }
-      }
-      
-      function drawPlayers() {
-          if (!players.player1 || !players.player2) return;
-          
-          // Calculate scale factor based on screen width to keep players visible
-          const scaleFactor = Math.min(1, gameWidth / 800);
-          const floorY = gameHeight - 50;
-          
-          // Adjust player positions for smaller screens
-          const p1ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player1.x * scaleFactor));
-          const p2ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player2.x * scaleFactor));
-          
-          // Draw player 1
-          drawAnimatedStickman(
-              p1ScreenX, 
-              floorY - PLAYER_HEIGHT, 
-              '#FF5555', 
-              'player1', 
-              false
-          );
-          
-          // Draw player 2
-          drawAnimatedStickman(
-              p2ScreenX, 
-              floorY - PLAYER_HEIGHT, 
-              '#5555FF', 
-              'player2', 
-              true
-          );
-      }
-      
-      function drawAnimatedStickman(x, y, color, playerId, facingLeft) {
-          const anim = playerAnimations[playerId];
-          const state = anim.state;
-          
-          ctx.save();
-          
-          // Apply victory jump animation
-          let yOffset = 0;
-          if (state === VICTORY) {
-              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
-          }
-          
-          // Apply defeat fall animation
-          if (state === DEFEAT) {
-              // Rotate the entire stickman
-              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
-              ctx.rotate(Math.PI / 2 * anim.defeatFall);
-              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
-              
-              // Add a falling effect
-              yOffset = anim.defeatFall * 20;
-          }
-          
-          // Apply hurt animation
-          if (state === HURT) {
-              // Rotate the entire stickman
-              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
-              ctx.rotate(anim.hurtAngle);
-              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
-          }
-          
-          // Flip if facing left
-          if (facingLeft) {
-              ctx.translate(x + PLAYER_WIDTH / 2, 0);
-              ctx.scale(-1, 1);
-              ctx.translate(-x - PLAYER_WIDTH / 2, 0);
-          }
-          
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 4;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          
-          // Add breathing animation for idle
-          let breatheOffset = 0;
-          if (state === IDLE) {
-              breatheOffset = anim.breatheOffset;
-          }
-          
-          // Add walking animation
-          let legOffset = 0;
-          let armOffset = 0;
-          if (state === WALKING) {
-              legOffset = Math.sin(anim.walkCycle) * 10;
-              armOffset = Math.sin(anim.walkCycle + Math.PI) * 5;
-          }
-          
-          // Head with slight bobbing
-          ctx.beginPath();
-          ctx.arc(
-              x + PLAYER_WIDTH / 2, 
-              y + 10 + breatheOffset + yOffset, 
-              10, 
-              0, 
-              Math.PI * 2
-          );
-          ctx.stroke();
-          
-          // Body with slight breathing movement
-          ctx.beginPath();
-          ctx.moveTo(
-              x + PLAYER_WIDTH / 2, 
-              y + 20 + breatheOffset + yOffset
-          );
-          ctx.lineTo(
-              x + PLAYER_WIDTH / 2, 
-              y + 50 + yOffset
-          );
-          ctx.stroke();
-          
-          // Arms based on state
-          if (state === HITTING) {
-              // Hitting pose with animation
-              const hitExtension = Math.sin(animationFrame * 2) * 5;
-              
-              // Extended punching arm
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH + 15 + hitExtension, y + 25 + yOffset);
-              ctx.stroke();
-              
-              // Rear arm
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 40 + yOffset);
-              ctx.stroke();
-          } else if (state === KICKING) {
-              // Kicking pose with animation
-              // Arms in balance position
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 25 + yOffset);
-              ctx.stroke();
-          } else if (state === VICTORY) {
-              // Victory pose - arms up
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 15 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH, y + 5 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 15 + yOffset);
-              ctx.lineTo(x, y + 5 + yOffset);
-              ctx.stroke();
-          } else if (state === DEFEAT) {
-              // Defeat pose - limp arms
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 45 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 45 + yOffset);
-              ctx.stroke();
-          } else {
-              // Normal or walking pose
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5 + armOffset, y + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5 - armOffset, y + 25 + yOffset);
-              ctx.stroke();
-          }
-          
-          // Legs based on state
-          if (state === KICKING) {
-              // Kicking pose with animation
-              const kickExtension = Math.sin(animationFrame * 2) * 5;
-              
-              // Standing leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 70 + yOffset);
-              ctx.stroke();
-              
-              // Kicking leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH + 20 + kickExtension, y + 60 + yOffset);
-              ctx.stroke();
-          } else if (state === VICTORY) {
-              // Victory pose - slight bounce in legs
-              const bounce = Math.sin(anim.victoryJump * 2) * 3;
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10 - bounce, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10 + bounce, y + 70 + yOffset);
-              ctx.stroke();
-          } else if (state === DEFEAT) {
-              // Defeat pose - limp legs
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 60 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 60 + yOffset);
-              ctx.stroke();
-          } else if (state === WALKING) {
-              // Walking animation
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10 + legOffset, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10 - legOffset, y + 70 + yOffset);
-              ctx.stroke();
-          } else {
-              // Normal pose
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70 + yOffset);
-              ctx.stroke();
-          }
-          
-          // If hurt, draw stars around head
-          if (state === HURT) {
-              ctx.strokeStyle = 'yellow';
-              for (let i = 0; i < 3; i++) {
-                  const angle = Math.PI * 2 * i / 3 + animationFrame;
-                  const distance = 20 + Math.sin(animationFrame) * 5;
-                  const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
-                  const starY = y + 10 + Math.sin(angle) * distance + yOffset;
-                  
-                  // Draw animated stars
-                  const starSize = 5 + Math.sin(animationFrame * 2 + i) * 2;
-                  
-                  ctx.beginPath();
-                  ctx.moveTo(starX - starSize, starY);
-                  ctx.lineTo(starX + starSize, starY);
-                  ctx.stroke();
-                  
-                  ctx.beginPath();
-                  ctx.moveTo(starX, starY - starSize);
-                  ctx.lineTo(starX, starY + starSize);
-                  ctx.stroke();
-              }
-          }
-          
-          // Draw victory sparkles
-          if (state === VICTORY) {
-              ctx.strokeStyle = 'gold';
-              for (let i = 0; i < 5; i++) {
-                  const angle = Math.PI * 2 * i / 5 + animationFrame * 0.5;
-                  const distance = 30 + Math.sin(animationFrame + i) * 10;
-                  const sparkleX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
-                  const sparkleY = y + 30 + Math.sin(angle) * distance + yOffset;
-                  
-                  // Draw animated sparkles
-                  const sparkleSize = 3 + Math.sin(animationFrame * 3 + i) * 2;
-                  
-                  // Draw a star shape
-                  ctx.beginPath();
-                  for (let j = 0; j < 5; j++) {
-                      const starAngle = Math.PI * 2 * j / 5 + animationFrame;
-                      const starX = sparkleX + Math.cos(starAngle) * sparkleSize;
-                      const starY = sparkleY + Math.sin(starAngle) * sparkleSize;
-                      
-                      if (j === 0) {
-                          ctx.moveTo(starX, starY);
-                      } else {
-                          ctx.lineTo(starX, starY);
-                      }
-                  }
-                  ctx.closePath();
-                  ctx.stroke();
-              }
-          }
-          
-          ctx.restore();
-      }
-      
-      function drawPowerBars() {
-          if (!players.player1 || !players.player2) return;
-          
-          const barHeight = 15;
-          const margin = 10;
-          
-          // Responsive bar width based on screen size
-          const barWidth = Math.min(200, (gameWidth / 2) - 20);
-          
-          // Player 1 power bar
-          ctx.fillStyle = '#333';
-          ctx.fillRect(margin, margin, barWidth, barHeight);
-          
-          // Animate power bar when taking damage
-          let p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
-          
-          // Add pulsing effect when low health
-          if (players.player1.power < MAX_POWER * 0.3) {
-              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
-              ctx.fillStyle = `rgba(255, 85, 85, ${pulse})`;
-          } else {
-              ctx.fillStyle = '#FF5555';
-          }
-          
-          ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
-          
-          ctx.strokeStyle = '#FFF';
-          ctx.strokeRect(margin, margin, barWidth, barHeight);
-          
-          ctx.fillStyle = '#FFF';
-          ctx.font = '12px Arial';
-          ctx.fillText('Player 1', margin, margin + barHeight + 12);
-          
-          // Player 2 power bar
-          ctx.fillStyle = '#333';
-          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          // Animate power bar when taking damage
-          let p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
-          
-          // Add pulsing effect when low health
-          if (players.player2.power < MAX_POWER * 0.3) {
-              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
-              ctx.fillStyle = `rgba(85, 85, 255, ${pulse})`;
-          } else {
-              ctx.fillStyle = '#5555FF';
-          }
-          
-          ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
-          
-          ctx.strokeStyle = '#FFF';
-          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          ctx.fillStyle = '#FFF';
-          ctx.font = '12px Arial';
-          ctx.fillText('Player 2', gameWidth - margin - barWidth, margin + barHeight + 12);
-      }
-      
-      function showWinner(winner) {
-          const winnerMessage = document.getElementById('winnerMessage');
-          const winnerText = document.getElementById('winnerText');
-          
-          // Format winner text nicely
-          winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
-          
-          // Make sure the display is set to block
-          winnerMessage.style.display = 'block';
-          
-          // Play victory sound
-          playSound('victory');
-          
-          // Reset ready status indicators
-          document.getElementById('player1Status').className = 'status-indicator status-waiting';
-          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
-          document.getElementById('player2Status').className = 'status-indicator status-waiting';
-          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
-          
-          // Reset restart button
-          const restartBtn = document.getElementById('restartBtn');
-          restartBtn.textContent = 'Play Again';
-          restartBtn.disabled = false;
-          
-          // Clear ready players array
-          readyPlayers = [];
-          
-          // Ensure animations continue to run
-          if (winner === 'player1') {
-              playerAnimations.player1.state = VICTORY;
-              playerAnimations.player2.state = DEFEAT;
-          } else {
-              playerAnimations.player2.state = VICTORY;
-              playerAnimations.player1.state = DEFEAT;
-          }
-          
-          // Reset hit feedback
-          hitFeedback.active = false;
-          
-          console.log(`Winner screen displayed for ${winner}`);
-      }
-  </script>
-</body>
-</html>
+              ctx.strokeStyle = 'rgba(0, 0, 255,
