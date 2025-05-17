@@ -316,6 +316,40 @@
       const HITTING = 'hitting';
       const KICKING = 'kicking';
       const HURT = 'hurt';
+      const WALKING = 'walking';
+      const VICTORY = 'victory';
+      const DEFEAT = 'defeat';
+      
+      // Animation variables
+      let animationFrame = 0;
+      const ANIMATION_SPEED = 0.1; // Lower is slower
+      let lastTime = 0;
+      
+      // Animation data for each player
+      const playerAnimations = {
+          player1: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: 1,
+              victoryJump: 0,
+              defeatFall: 0
+          },
+          player2: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: -1,
+              victoryJump: 0,
+              defeatFall: 0
+          }
+      };
       
       // Debug function
       function debug(message) {
@@ -347,18 +381,19 @@
           setupRestartButton();
           
           // Start game loop
+          lastTime = performance.now();
           requestAnimationFrame(gameLoop);
       };
       
       // Load all game sounds
       function loadSounds() {
           const soundFiles = {
-              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
-              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
-              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
-              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
-              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              hit: '/sounds/hit.mp3',
+              kick: '/sounds/kick.mp3',
+              hurt: '/sounds/hurt.mp3',
+              victory: '/sounds/victory.mp3',
+              gameStart: '/sounds/game-start.mp3',
+              button: '/sounds/button-click.mp3'
           };
           
           let loadedCount = 0;
@@ -476,6 +511,14 @@
                   players = state.players;
                   gameStarted = state.gameStarted;
                   
+                  // Update animation states based on player states
+                  if (players.player1) {
+                      updateAnimationState('player1', players.player1.state, players.player1.isMoving);
+                  }
+                  if (players.player2) {
+                      updateAnimationState('player2', players.player2.state, players.player2.isMoving);
+                  }
+                  
                   // Play game start sound when game begins
                   if (gameStarted && !wasGameStarted) {
                       playSound('gameStart');
@@ -501,6 +544,16 @@
                   // Check for winner
                   if (state.winner) {
                       showWinner(state.winner);
+                      
+                      // Set victory/defeat animations
+                      if (state.winner === 'player1') {
+                          playerAnimations.player1.state = VICTORY;
+                          playerAnimations.player2.state = DEFEAT;
+                      } else {
+                          playerAnimations.player2.state = VICTORY;
+                          playerAnimations.player1.state = DEFEAT;
+                      }
+                      
                       playSound('victory');
                   } else if (state.winner === null && document.getElementById('winnerMessage').style.display === 'block') {
                       // Game has been reset, hide winner message
@@ -519,6 +572,10 @@
                       
                       // Clear ready players array
                       readyPlayers = [];
+                      
+                      // Reset animation states
+                      playerAnimations.player1.state = IDLE;
+                      playerAnimations.player2.state = IDLE;
                   }
               });
               
@@ -544,6 +601,30 @@
               document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
               // Try to reconnect after 3 seconds
               setTimeout(connectToServer, 3000);
+          }
+      }
+      
+      // Update animation state based on player state
+      function updateAnimationState(playerId, state, isMoving) {
+          const anim = playerAnimations[playerId];
+          
+          // Only update if state changed
+          if (anim.state !== state) {
+              anim.frame = 0; // Reset animation frame on state change
+              
+              // Reset specific animation variables
+              if (state === HURT) {
+                  anim.hurtAngle = 0;
+                  anim.hurtDirection = playerId === 'player1' ? 1 : -1;
+              }
+          }
+          
+          // Set the animation state
+          anim.state = state;
+          
+          // Handle walking state
+          if (isMoving && state === IDLE) {
+              anim.state = WALKING;
           }
       }
       
@@ -853,7 +934,17 @@
           });
       }
       
-      function gameLoop() {
+      function gameLoop(timestamp) {
+          // Calculate delta time for smooth animations
+          const deltaTime = timestamp - lastTime;
+          lastTime = timestamp;
+          
+          // Update animation frame
+          animationFrame += ANIMATION_SPEED * (deltaTime / 16.67); // Normalize to ~60fps
+          
+          // Update player animations
+          updatePlayerAnimations(deltaTime);
+          
           // Clear canvas
           ctx.clearRect(0, 0, gameWidth, gameHeight);
           
@@ -866,6 +957,68 @@
           
           // Continue the game loop
           requestAnimationFrame(gameLoop);
+      }
+      
+      // Update player animations
+      function updatePlayerAnimations(deltaTime) {
+          // Update player 1 animations
+          updatePlayerAnimation('player1', deltaTime);
+          
+          // Update player 2 animations
+          updatePlayerAnimation('player2', deltaTime);
+      }
+      
+      // Update individual player animation
+      function updatePlayerAnimation(playerId, deltaTime) {
+          const anim = playerAnimations[playerId];
+          
+          // Update breathing animation for idle
+          if (anim.state === IDLE) {
+              anim.breatheOffset += anim.breatheDirection * 0.02 * (deltaTime / 16.67);
+              
+              // Reverse direction at limits
+              if (anim.breatheOffset > 1) {
+                  anim.breatheOffset = 1;
+                  anim.breatheDirection = -1;
+              } else if (anim.breatheOffset < -1) {
+                  anim.breatheOffset = -1;
+                  anim.breatheDirection = 1;
+              }
+          }
+          
+          // Update walking animation
+          if (anim.state === WALKING) {
+              anim.walkCycle += 0.1 * (deltaTime / 16.67);
+              if (anim.walkCycle > Math.PI * 2) {
+                  anim.walkCycle -= Math.PI * 2;
+              }
+          }
+          
+          // Update hurt animation
+          if (anim.state === HURT) {
+              anim.hurtAngle += anim.hurtDirection * 0.2 * (deltaTime / 16.67);
+              
+              // Limit the hurt angle
+              if (Math.abs(anim.hurtAngle) > Math.PI / 6) {
+                  anim.hurtDirection *= -0.7; // Bounce back with damping
+              }
+          }
+          
+          // Update victory animation
+          if (anim.state === VICTORY) {
+              anim.victoryJump += 0.1 * (deltaTime / 16.67);
+              if (anim.victoryJump > Math.PI * 2) {
+                  anim.victoryJump -= Math.PI * 2;
+              }
+          }
+          
+          // Update defeat animation
+          if (anim.state === DEFEAT) {
+              if (anim.defeatFall < 1) {
+                  anim.defeatFall += 0.02 * (deltaTime / 16.67);
+                  if (anim.defeatFall > 1) anim.defeatFall = 1;
+              }
+          }
       }
       
       function drawBackground() {
@@ -900,8 +1053,6 @@
           // Draw some scattered rocks
           drawRocks();
       }
-
-      // Add these new helper functions after the drawBackground function:
 
       function drawMountains() {
           ctx.fillStyle = '#2a3a4a';
@@ -1055,26 +1206,54 @@
           const p2ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player2.x * scaleFactor));
           
           // Draw player 1
-          drawStickman(
+          drawAnimatedStickman(
               p1ScreenX, 
               floorY - PLAYER_HEIGHT, 
               '#FF5555', 
-              players.player1.state, 
+              'player1', 
               false
           );
           
           // Draw player 2
-          drawStickman(
+          drawAnimatedStickman(
               p2ScreenX, 
               floorY - PLAYER_HEIGHT, 
               '#5555FF', 
-              players.player2.state, 
+              'player2', 
               true
           );
       }
       
-      function drawStickman(x, y, color, state, facingLeft) {
+      function drawAnimatedStickman(x, y, color, playerId, facingLeft) {
+          const anim = playerAnimations[playerId];
+          const state = anim.state;
+          
           ctx.save();
+          
+          // Apply victory jump animation
+          let yOffset = 0;
+          if (state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          }
+          
+          // Apply defeat fall animation
+          if (state === DEFEAT) {
+              // Rotate the entire stickman
+              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
+              ctx.rotate(Math.PI / 2 * anim.defeatFall);
+              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
+              
+              // Add a falling effect
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          // Apply hurt animation
+          if (state === HURT) {
+              // Rotate the entire stickman
+              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
+              ctx.rotate(anim.hurtAngle);
+              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
+          }
           
           // Flip if facing left
           if (facingLeft) {
@@ -1088,76 +1267,170 @@
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           
-          // Head
+          // Add breathing animation for idle
+          let breatheOffset = 0;
+          if (state === IDLE) {
+              breatheOffset = anim.breatheOffset;
+          }
+          
+          // Add walking animation
+          let legOffset = 0;
+          let armOffset = 0;
+          if (state === WALKING) {
+              legOffset = Math.sin(anim.walkCycle) * 10;
+              armOffset = Math.sin(anim.walkCycle + Math.PI) * 5;
+          }
+          
+          // Head with slight bobbing
           ctx.beginPath();
-          ctx.arc(x + PLAYER_WIDTH / 2, y + 10, 10, 0, Math.PI * 2);
+          ctx.arc(
+              x + PLAYER_WIDTH / 2, 
+              y + 10 + breatheOffset + yOffset, 
+              10, 
+              0, 
+              Math.PI * 2
+          );
           ctx.stroke();
           
-          // Body
+          // Body with slight breathing movement
           ctx.beginPath();
-          ctx.moveTo(x + PLAYER_WIDTH / 2, y + 20);
-          ctx.lineTo(x + PLAYER_WIDTH / 2, y + 50);
+          ctx.moveTo(
+              x + PLAYER_WIDTH / 2, 
+              y + 20 + breatheOffset + yOffset
+          );
+          ctx.lineTo(
+              x + PLAYER_WIDTH / 2, 
+              y + 50 + yOffset
+          );
           ctx.stroke();
           
-          // Arms
+          // Arms based on state
           if (state === HITTING) {
-              // Hitting pose
+              // Hitting pose with animation
+              const hitExtension = Math.sin(animationFrame * 2) * 5;
+              
+              // Extended punching arm
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20);
-              ctx.lineTo(x + PLAYER_WIDTH + 15, y + 25);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH + 15 + hitExtension, y + 25 + yOffset);
               ctx.stroke();
               
+              // Rear arm
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + 5, y + 40);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 40 + yOffset);
               ctx.stroke();
           } else if (state === KICKING) {
-              // Kicking pose
+              // Kicking pose with animation
+              // Arms in balance position
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25 + yOffset);
               ctx.stroke();
               
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + 5, y + 25);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 25 + yOffset);
+              ctx.stroke();
+          } else if (state === VICTORY) {
+              // Victory pose - arms up
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 15 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH, y + 5 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 15 + yOffset);
+              ctx.lineTo(x, y + 5 + yOffset);
+              ctx.stroke();
+          } else if (state === DEFEAT) {
+              // Defeat pose - limp arms
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 45 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5, y + 45 + yOffset);
               ctx.stroke();
           } else {
-              // Normal pose
+              // Normal or walking pose
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 5 + armOffset, y + 25 + yOffset);
               ctx.stroke();
               
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30);
-              ctx.lineTo(x + 5, y + 25);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
+              ctx.lineTo(x + 5 - armOffset, y + 25 + yOffset);
               ctx.stroke();
           }
           
-          // Legs
+          // Legs based on state
           if (state === KICKING) {
-              // Kicking pose
+              // Kicking pose with animation
+              const kickExtension = Math.sin(animationFrame * 2) * 5;
+              
+              // Standing leg
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-              ctx.lineTo(x + 10, y + 70);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 70 + yOffset);
+              ctx.stroke();
+              
+              // Kicking leg
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH + 20 + kickExtension, y + 60 + yOffset);
+              ctx.stroke();
+          } else if (state === VICTORY) {
+              // Victory pose - slight bounce in legs
+              const bounce = Math.sin(anim.victoryJump * 2) * 3;
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10 - bounce, y + 70 + yOffset);
               ctx.stroke();
               
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-              ctx.lineTo(x + PLAYER_WIDTH + 20, y + 60);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10 + bounce, y + 70 + yOffset);
+              ctx.stroke();
+          } else if (state === DEFEAT) {
+              // Defeat pose - limp legs
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 60 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 60 + yOffset);
+              ctx.stroke();
+          } else if (state === WALKING) {
+              // Walking animation
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10 + legOffset, y + 70 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10 - legOffset, y + 70 + yOffset);
               ctx.stroke();
           } else {
               // Normal pose
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-              ctx.lineTo(x + 10, y + 70);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + 10, y + 70 + yOffset);
               ctx.stroke();
               
               ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70);
+              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
+              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70 + yOffset);
               ctx.stroke();
           }
           
@@ -1165,18 +1438,52 @@
           if (state === HURT) {
               ctx.strokeStyle = 'yellow';
               for (let i = 0; i < 3; i++) {
-                  const angle = Math.PI * 2 * i / 3;
-                  const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * 20;
-                  const starY = y + 10 + Math.sin(angle) * 20;
+                  const angle = Math.PI * 2 * i / 3 + animationFrame;
+                  const distance = 20 + Math.sin(animationFrame) * 5;
+                  const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
+                  const starY = y + 10 + Math.sin(angle) * distance + yOffset;
+                  
+                  // Draw animated stars
+                  const starSize = 5 + Math.sin(animationFrame * 2 + i) * 2;
                   
                   ctx.beginPath();
-                  ctx.moveTo(starX - 5, starY);
-                  ctx.lineTo(starX + 5, starY);
+                  ctx.moveTo(starX - starSize, starY);
+                  ctx.lineTo(starX + starSize, starY);
                   ctx.stroke();
                   
                   ctx.beginPath();
-                  ctx.moveTo(starX, starY - 5);
-                  ctx.lineTo(starX, starY + 5);
+                  ctx.moveTo(starX, starY - starSize);
+                  ctx.lineTo(starX, starY + starSize);
+                  ctx.stroke();
+              }
+          }
+          
+          // Draw victory sparkles
+          if (state === VICTORY) {
+              ctx.strokeStyle = 'gold';
+              for (let i = 0; i < 5; i++) {
+                  const angle = Math.PI * 2 * i / 5 + animationFrame * 0.5;
+                  const distance = 30 + Math.sin(animationFrame + i) * 10;
+                  const sparkleX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
+                  const sparkleY = y + 30 + Math.sin(angle) * distance + yOffset;
+                  
+                  // Draw animated sparkles
+                  const sparkleSize = 3 + Math.sin(animationFrame * 3 + i) * 2;
+                  
+                  // Draw a star shape
+                  ctx.beginPath();
+                  for (let j = 0; j < 5; j++) {
+                      const starAngle = Math.PI * 2 * j / 5 + animationFrame;
+                      const starX = sparkleX + Math.cos(starAngle) * sparkleSize;
+                      const starY = sparkleY + Math.sin(starAngle) * sparkleSize;
+                      
+                      if (j === 0) {
+                          ctx.moveTo(starX, starY);
+                      } else {
+                          ctx.lineTo(starX, starY);
+                      }
+                  }
+                  ctx.closePath();
                   ctx.stroke();
               }
           }
@@ -1197,8 +1504,17 @@
           ctx.fillStyle = '#333';
           ctx.fillRect(margin, margin, barWidth, barHeight);
           
-          ctx.fillStyle = '#FF5555';
-          const p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
+          // Animate power bar when taking damage
+          let p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
+          
+          // Add pulsing effect when low health
+          if (players.player1.power < MAX_POWER * 0.3) {
+              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
+              ctx.fillStyle = `rgba(255, 85, 85, ${pulse})`;
+          } else {
+              ctx.fillStyle = '#FF5555';
+          }
+          
           ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
           
           ctx.strokeStyle = '#FFF';
@@ -1212,8 +1528,17 @@
           ctx.fillStyle = '#333';
           ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
           
-          ctx.fillStyle = '#5555FF';
-          const p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
+          // Animate power bar when taking damage
+          let p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
+          
+          // Add pulsing effect when low health
+          if (players.player2.power < MAX_POWER * 0.3) {
+              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
+              ctx.fillStyle = `rgba(85, 85, 255, ${pulse})`;
+          } else {
+              ctx.fillStyle = '#5555FF';
+          }
+          
           ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
           
           ctx.strokeStyle = '#FFF';
