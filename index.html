@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Stickman Fighter</title>
+  <title>Stickman Fighter with Blocking</title>
   <!-- Load Socket.io from CDN -->
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <style>
@@ -29,7 +29,7 @@
       }
       .controls {
           position: fixed;
-          bottom: 30px; /* Increased from 20px to move controls lower */
+          bottom: 30px;
           width: 100%;
           padding: 0 10px;
           box-sizing: border-box;
@@ -40,7 +40,7 @@
       .player-controls {
           display: flex;
           gap: 12px;
-          margin-bottom: 15px; /* Extra margin at the bottom */
+          margin-bottom: 15px;
       }
       .control-btn {
           width: 65px;
@@ -54,7 +54,6 @@
           touch-action: manipulation;
           user-select: none;
           -webkit-user-select: none;
-          /* Add transition for smooth feedback */
           transition: all 0.1s ease;
           position: relative;
           box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
@@ -101,6 +100,13 @@
       }
       .move-btn.active {
           background-color: rgba(50, 200, 50, 0.9);
+      }
+      /* New block button style */
+      .block-btn {
+          background-color: rgba(255, 200, 50, 0.7);
+      }
+      .block-btn.active {
+          background-color: rgba(255, 200, 50, 0.9);
       }
       /* Button ripple effect */
       .control-btn::after {
@@ -255,6 +261,41 @@
           justify-content: center;
           font-size: 20px;
       }
+      /* Block indicator styles */
+      .block-indicator {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background-color: rgba(255, 200, 50, 0.5);
+          border: 2px solid rgba(255, 200, 50, 0.8);
+          display: none;
+          z-index: 5;
+          animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.7; }
+          50% { transform: scale(1.1); opacity: 0.9; }
+          100% { transform: scale(1); opacity: 0.7; }
+      }
+      /* Block cooldown indicator */
+      .block-cooldown {
+          position: absolute;
+          bottom: -10px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 100%;
+          height: 5px;
+          background-color: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+          overflow: hidden;
+      }
+      .block-cooldown-fill {
+          height: 100%;
+          width: 100%;
+          background-color: rgba(255, 200, 50, 0.8);
+          transform-origin: left;
+      }
   </style>
 </head>
 <body>
@@ -309,6 +350,13 @@
           time: 0
       };
 
+      // Block variables
+      let blockIndicators = {};
+      let blockCooldowns = {
+          player1: 0,
+          player2: 0
+      };
+
       const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
       
       // Sound variables
@@ -327,6 +375,11 @@
       const KICK_RANGE = 50;
       const GAME_END_DELAY = 1500; // Delay before showing winner message (ms)
 
+      // Block constants
+      const BLOCK_DURATION = 1000; // How long a block lasts (ms)
+      const BLOCK_COOLDOWN = 2000; // Cooldown before can block again (ms)
+      const BLOCK_DAMAGE_REDUCTION = 0.75; // Reduce damage by 75% when blocking
+
       // Hit detection constants
       const HEAD_HITBOX_RADIUS = 10;
       const BODY_HITBOX_WIDTH = 20;
@@ -341,6 +394,7 @@
       const IDLE = 'idle';
       const HITTING = 'hitting';
       const KICKING = 'kicking';
+      const BLOCKING = 'blocking'; // New blocking state
       const HURT = 'hurt';
       const WALKING = 'walking';
       const VICTORY = 'victory';
@@ -362,7 +416,8 @@
               hurtAngle: 0,
               hurtDirection: 1,
               victoryJump: 0,
-              defeatFall: 0
+              defeatFall: 0,
+              blockStart: 0 // When block started
           },
           player2: {
               state: IDLE,
@@ -373,7 +428,8 @@
               hurtAngle: 0,
               hurtDirection: -1,
               victoryJump: 0,
-              defeatFall: 0
+              defeatFall: 0,
+              blockStart: 0 // When block started
           }
       };
       
@@ -406,10 +462,54 @@
           // Set up restart button with multiple event types
           setupRestartButton();
           
+          // Create block indicators
+          createBlockIndicators();
+          
           // Start game loop
           lastTime = performance.now();
           requestAnimationFrame(gameLoop);
       };
+      
+      // Create block indicators for both players
+      function createBlockIndicators() {
+          // Create player 1 block indicator
+          const p1Indicator = document.createElement('div');
+          p1Indicator.className = 'block-indicator';
+          p1Indicator.id = 'player1BlockIndicator';
+          document.getElementById('gameArea').appendChild(p1Indicator);
+          
+          // Add cooldown bar for player 1
+          const p1Cooldown = document.createElement('div');
+          p1Cooldown.className = 'block-cooldown';
+          p1Indicator.appendChild(p1Cooldown);
+          
+          const p1CooldownFill = document.createElement('div');
+          p1CooldownFill.className = 'block-cooldown-fill';
+          p1CooldownFill.id = 'player1BlockCooldown';
+          p1Cooldown.appendChild(p1CooldownFill);
+          
+          // Create player 2 block indicator
+          const p2Indicator = document.createElement('div');
+          p2Indicator.className = 'block-indicator';
+          p2Indicator.id = 'player2BlockIndicator';
+          document.getElementById('gameArea').appendChild(p2Indicator);
+          
+          // Add cooldown bar for player 2
+          const p2Cooldown = document.createElement('div');
+          p2Cooldown.className = 'block-cooldown';
+          p2Indicator.appendChild(p2Cooldown);
+          
+          const p2CooldownFill = document.createElement('div');
+          p2CooldownFill.className = 'block-cooldown-fill';
+          p2CooldownFill.id = 'player2BlockCooldown';
+          p2Cooldown.appendChild(p2CooldownFill);
+          
+          // Store references
+          blockIndicators = {
+              player1: p1Indicator,
+              player2: p2Indicator
+          };
+      }
       
       // Load all game sounds
       function loadSounds() {
@@ -419,7 +519,9 @@
               hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
               victory: '/Stickman-Fighter-v2/assets/victory.mp3',
               gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
-              button: '/Stickman-Fighter-v2/assets/button-press.mp3'
+              button: '/Stickman-Fighter-v2/assets/button-press.mp3',
+              block: '/Stickman-Fighter-v2/assets/block.mp3', // New block sound
+              blockHit: '/Stickman-Fighter-v2/assets/block-hit.mp3' // New block hit sound
           };
           
           let loadedCount = 0;
@@ -552,6 +654,14 @@
                       players.player2.isMoving = false;
                   }
                   
+                  // Add blocking property if it doesn't exist
+                  if (players.player1 && players.player1.blocking === undefined) {
+                      players.player1.blocking = false;
+                  }
+                  if (players.player2 && players.player2.blocking === undefined) {
+                      players.player2.blocking = false;
+                  }
+                  
                   // Check if a player's health just reached zero
                   const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
                   const player2Defeated = prevPlayer2Power > 0 && players.player2.power <= 0;
@@ -590,10 +700,27 @@
                   
                   // Update animation states based on player states
                   if (players.player1 && !gameEnding) {
-                      updateAnimationState('player1', players.player1.state, players.player1.isMoving);
+                      // Check if player is blocking
+                      if (players.player1.blocking) {
+                          playerAnimations.player1.state = BLOCKING;
+                          playerAnimations.player1.blockStart = performance.now();
+                          updateBlockIndicator('player1', true);
+                      } else {
+                          updateAnimationState('player1', players.player1.state, players.player1.isMoving);
+                          updateBlockIndicator('player1', false);
+                      }
                   }
+                  
                   if (players.player2 && !gameEnding) {
-                      updateAnimationState('player2', players.player2.state, players.player2.isMoving);
+                      // Check if player is blocking
+                      if (players.player2.blocking) {
+                          playerAnimations.player2.state = BLOCKING;
+                          playerAnimations.player2.blockStart = performance.now();
+                          updateBlockIndicator('player2', true);
+                      } else {
+                          updateAnimationState('player2', players.player2.state, players.player2.isMoving);
+                          updateBlockIndicator('player2', false);
+                      }
                   }
                   
                   // Play game start sound when game begins
@@ -606,12 +733,14 @@
                       if (players.player1.state === HITTING) playSound('hit');
                       if (players.player1.state === KICKING) playSound('kick');
                       if (players.player1.state === HURT) playSound('hurt');
+                      if (players.player1.blocking) playSound('block');
                   }
                   
                   if (players.player2 && prevPlayer2State !== players.player2.state && !gameEnding) {
                       if (players.player2.state === HITTING) playSound('hit');
                       if (players.player2.state === KICKING) playSound('kick');
                       if (players.player2.state === HURT) playSound('hurt');
+                      if (players.player2.blocking) playSound('block');
                   }
                   
                   // Show/hide waiting message
@@ -699,6 +828,38 @@
           }
       }
       
+      // Update block indicator position and visibility
+      function updateBlockIndicator(playerId, isBlocking) {
+          const indicator = blockIndicators[playerId];
+          if (!indicator) return;
+          
+          if (isBlocking) {
+              // Show indicator
+              indicator.style.display = 'block';
+              
+              // Position indicator above player
+              if (players[playerId]) {
+                  const scaleFactor = Math.min(1, gameWidth / 800);
+                  const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players[playerId].x * scaleFactor));
+                  const screenY = gameHeight - 50 - PLAYER_HEIGHT - 30; // Position above player
+                  
+                  indicator.style.left = (screenX + PLAYER_WIDTH / 2 - 20) + 'px'; // Center horizontally
+                  indicator.style.top = screenY + 'px';
+              }
+          } else {
+              // Hide indicator
+              indicator.style.display = 'none';
+          }
+      }
+      
+      // Update block cooldown display
+      function updateBlockCooldown(playerId, cooldownPercent) {
+          const cooldownElement = document.getElementById(`${playerId}BlockCooldown`);
+          if (cooldownElement) {
+              cooldownElement.style.transform = `scaleX(${cooldownPercent})`;
+          }
+      }
+      
       // Reset game state when a new game starts
       function resetGameState() {
           console.log("Resetting game state");
@@ -731,6 +892,14 @@
           
           // Reset hit feedback
           hitFeedback.active = false;
+          
+          // Reset block cooldowns
+          blockCooldowns.player1 = 0;
+          blockCooldowns.player2 = 0;
+          
+          // Hide block indicators
+          updateBlockIndicator('player1', false);
+          updateBlockIndicator('player2', false);
       }
       
       // Update animation state based on player state
@@ -796,6 +965,7 @@
               <button class="control-btn move-btn" id="moveRight">→</button>
               <button class="control-btn hit-btn" id="hitBtn">HIT</button>
               <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+              <button class="control-btn block-btn" id="blockBtn">BLOCK</button>
           `;
           
           controlsContainer.appendChild(playerControls);
@@ -810,18 +980,21 @@
           const moveRightBtn = document.getElementById('moveRight');
           const hitBtn = document.getElementById('hitBtn');
           const kickBtn = document.getElementById('kickBtn');
+          const blockBtn = document.getElementById('blockBtn');
           
           // Clear any existing event listeners (just in case)
           moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
           moveRightBtn.replaceWith(moveRightBtn.cloneNode(true));
           hitBtn.replaceWith(hitBtn.cloneNode(true));
           kickBtn.replaceWith(kickBtn.cloneNode(true));
+          blockBtn.replaceWith(blockBtn.cloneNode(true));
           
           // Get the fresh elements
           const newMoveLeftBtn = document.getElementById('moveLeft');
           const newMoveRightBtn = document.getElementById('moveRight');
           const newHitBtn = document.getElementById('hitBtn');
           const newKickBtn = document.getElementById('kickBtn');
+          const newBlockBtn = document.getElementById('blockBtn');
           
           // Add touch start event listeners
           newMoveLeftBtn.addEventListener('touchstart', function(e) {
@@ -848,6 +1021,15 @@
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
+          newBlockBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding && canBlock(playerId)) {
+                  socket.emit('block', {blocking: true});
+                  startBlockCooldown(playerId);
+              }
+          });
+          
           // Add touch end event listeners
           newMoveLeftBtn.addEventListener('touchend', function(e) {
               e.preventDefault();
@@ -871,6 +1053,12 @@
               this.classList.remove('active');
           });
           
+          newBlockBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('block', {blocking: false});
+          });
+          
           // For mouse users (testing)
           newMoveLeftBtn.addEventListener('mousedown', function(e) {
               this.classList.add('active');
@@ -892,6 +1080,14 @@
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
+          newBlockBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding && canBlock(playerId)) {
+                  socket.emit('block', {blocking: true});
+                  startBlockCooldown(playerId);
+              }
+          });
+          
           newMoveLeftBtn.addEventListener('mouseup', function(e) {
               this.classList.remove('active');
               if (socket && !gameEnding) socket.emit('stopMove');
@@ -910,8 +1106,23 @@
               this.classList.remove('active');
           });
           
+          newBlockBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('block', {blocking: false});
+          });
+          
           // Setup keyboard controls
           setupKeyboardControls();
+      }
+      
+      // Check if player can block (not in cooldown)
+      function canBlock(playerId) {
+          return blockCooldowns[playerId] <= 0;
+      }
+      
+      // Start block cooldown for a player
+      function startBlockCooldown(playerId) {
+          blockCooldowns[playerId] = BLOCK_COOLDOWN;
       }
       
       function setupKeyboardControls() {
@@ -949,6 +1160,13 @@
                   buttonId = 'kickBtn';
                   command = {type: 'attack', data: {type: 'kick'}};
               }
+              else if (e.key === 's') {
+                  buttonId = 'blockBtn';
+                  if (canBlock(playerId)) {
+                      command = {type: 'block', data: {blocking: true}};
+                      startBlockCooldown(playerId);
+                  }
+              }
           }
           // Player 2 controls
           else if (playerId === 'player2') {
@@ -968,6 +1186,13 @@
                   buttonId = 'kickBtn';
                   command = {type: 'attack', data: {type: 'kick'}};
               }
+              else if (e.key === 'ArrowDown') {
+                  buttonId = 'blockBtn';
+                  if (canBlock(playerId)) {
+                      command = {type: 'block', data: {blocking: true}};
+                      startBlockCooldown(playerId);
+                  }
+              }
           }
           
           // Add active class to the button
@@ -983,6 +1208,8 @@
                       socket.emit('move', command.data);
                   } else if (command.type === 'attack') {
                       socket.emit('attack', command.data);
+                  } else if (command.type === 'block') {
+                      socket.emit('block', command.data);
                   }
               }
           }
@@ -993,6 +1220,7 @@
           
           let buttonId = null;
           let shouldStopMove = false;
+          let shouldStopBlock = false;
           
           // Player 1 controls
           if (playerId === 'player1') {
@@ -1009,6 +1237,10 @@
               }
               else if (e.key === 'e') {
                   buttonId = 'kickBtn';
+              }
+              else if (e.key === 's') {
+                  buttonId = 'blockBtn';
+                  shouldStopBlock = true;
               }
           }
           // Player 2 controls
@@ -1027,6 +1259,10 @@
               else if (e.key === '.') {
                   buttonId = 'kickBtn';
               }
+              else if (e.key === 'ArrowDown') {
+                  buttonId = 'blockBtn';
+                  shouldStopBlock = true;
+              }
           }
           
           // Remove active class from the button
@@ -1039,6 +1275,11 @@
               // Stop movement if needed
               if (shouldStopMove && !gameEnding) {
                   socket.emit('stopMove');
+              }
+              
+              // Stop blocking if needed
+              if (shouldStopBlock && !gameEnding) {
+                  socket.emit('block', {blocking: false});
               }
           }
       }
@@ -1077,18 +1318,9 @@
           
           // Update player animations
           updatePlayerAnimations(deltaTime);
-
-          /*
-          // Check for game ending sequence
-          if (gameEnding && gameState.winner && !winnerAnnounced) {
-              const now = performance.now();
-              if (now - gameEndTime >= GAME_END_DELAY) {
-                  // Show winner message after delay
-                  showWinner(gameState.winner);
-                  winnerAnnounced = true;
-              }
-          }
-          */
+          
+          // Update block cooldowns
+          updateBlockCooldowns(deltaTime);
 
           // Update hit detection (only if game is active and not ending)
           if (gameStarted && !gameEnding) {
@@ -1115,6 +1347,48 @@
           
           // Continue the game loop
           requestAnimationFrame(gameLoop);
+      }
+      
+      // Update block cooldowns
+      function updateBlockCooldowns(deltaTime) {
+          // Update player 1 cooldown
+          if (blockCooldowns.player1 > 0) {
+              blockCooldowns.player1 -= deltaTime;
+              if (blockCooldowns.player1 < 0) blockCooldowns.player1 = 0;
+              
+              // Update cooldown display
+              updateBlockCooldown('player1', 1 - (blockCooldowns.player1 / BLOCK_COOLDOWN));
+          }
+          
+          // Update player 2 cooldown
+          if (blockCooldowns.player2 > 0) {
+              blockCooldowns.player2 -= deltaTime;
+              if (blockCooldowns.player2 < 0) blockCooldowns.player2 = 0;
+              
+              // Update cooldown display
+              updateBlockCooldown('player2', 1 - (blockCooldowns.player2 / BLOCK_COOLDOWN));
+          }
+          
+          // Check if block duration has expired
+          const now = performance.now();
+          
+          // Player 1 block duration check
+          if (playerAnimations.player1.state === BLOCKING && 
+              now - playerAnimations.player1.blockStart > BLOCK_DURATION) {
+              // Auto-release block after duration
+              if (socket && playerId === 'player1') {
+                  socket.emit('block', {blocking: false});
+              }
+          }
+          
+          // Player 2 block duration check
+          if (playerAnimations.player2.state === BLOCKING && 
+              now - playerAnimations.player2.blockStart > BLOCK_DURATION) {
+              // Auto-release block after duration
+              if (socket && playerId === 'player2') {
+                  socket.emit('block', {blocking: false});
+              }
+          }
       }
       
       // Update player animations
@@ -1240,7 +1514,8 @@
                   active: anim.state === HITTING || anim.state === KICKING,
                   type: anim.state === HITTING ? 'hit' : 'kick',
                   range: attackRange
-              }
+              },
+              blocking: anim.state === BLOCKING
           };
       }
 
@@ -1262,7 +1537,7 @@
           if (p1Hitbox.attackPoint.active && players.player1.state !== HURT) {
               const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
               if (hit) {
-                  applyHit('player1', 'player2', p1Hitbox.attackPoint, hit);
+                  applyHit('player1', 'player2', p1Hitbox.attackPoint, hit, p2Hitbox.blocking);
               }
           }
           
@@ -1270,7 +1545,7 @@
           if (p2Hitbox.attackPoint.active && players.player2.state !== HURT) {
               const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
               if (hit) {
-                  applyHit('player2', 'player1', p2Hitbox.attackPoint, hit);
+                  applyHit('player2', 'player1', p2Hitbox.attackPoint, hit, p1Hitbox.blocking);
               }
           }
       }
@@ -1304,7 +1579,7 @@
       }
 
       // Apply hit effects
-      function applyHit(attackerId, targetId, attackPoint, hit) {
+      function applyHit(attackerId, targetId, attackPoint, hit, isBlocking) {
           // Don't register hits if the game is over
           if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
           
@@ -1318,13 +1593,22 @@
               damage *= CRITICAL_HIT_MULTIPLIER;
           }
           
+          // Reduce damage if blocking
+          if (isBlocking) {
+              damage *= (1 - BLOCK_DAMAGE_REDUCTION);
+              
+              // Play block hit sound
+              playSound('blockHit');
+          }
+          
           // Send attack to server
           if (socket) {
               socket.emit('registerHit', {
                   attackerId: attackerId,
                   targetId: targetId,
                   damage: damage,
-                  hitZone: hit.zone
+                  hitZone: hit.zone,
+                  blocked: isBlocking
               });
           }
           
@@ -1333,7 +1617,7 @@
               active: true,
               x: hit.point.x,
               y: hit.point.y,
-              type: hit.zone === 'head' ? 'critical' : 'normal',
+              type: isBlocking ? 'blocked' : (hit.zone === 'head' ? 'critical' : 'normal'),
               time: performance.now()
           };
       }
@@ -1362,6 +1646,10 @@
               // Critical hit effect (red burst)
               ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
               ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+          } else if (hitFeedback.type === 'blocked') {
+              // Blocked hit effect (yellow/gold burst)
+              ctx.fillStyle = `rgba(255, 200, 50, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
           } else {
               // Normal hit effect (white burst)
               ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
@@ -1393,6 +1681,376 @@
           }
           
           ctx.restore();
+      }
+
+      // Draw power bars
+      function drawPowerBars() {
+          if (!players.player1 || !players.player2) return;
+          
+          const barWidth = Math.min(300, gameWidth * 0.4);
+          const barHeight = 20;
+          const margin = 10;
+          
+          ctx.save();
+          
+          // Player 1 power bar (left side)
+          const p1Power = players.player1.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(margin, margin, barWidth, barHeight);
+          
+          // Bar fill
+          ctx.fillStyle = p1Power > 0.3 ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 50, 50, 0.4)';
+          ctx.fillRect(margin, margin, barWidth * p1Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(margin, margin, barWidth, barHeight);
+          
+          // Player 2 power bar (right side)
+          const p2Power = players.player2.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          // Bar fill (right-aligned)
+          ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
+          ctx.fillRect(gameWidth - margin - barWidth * p2Power, margin, barWidth * p2Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          ctx.restore();
+      }
+
+      // Draw players
+      function drawPlayers() {
+          if (!players.player1 || !players.player2) return;
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Draw player 1 (red)
+          drawPlayer('player1', scaleFactor, floorY);
+          
+          // Draw player 2 (blue)
+          drawPlayer('player2', scaleFactor, floorY);
+      }
+
+      // Draw a single player
+      function drawPlayer(playerId, scaleFactor, floorY) {
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Set player color
+          const playerColor = playerId === 'player1' ? '#ff5555' : '#5555ff';
+          const outlineColor = playerId === 'player1' ? '#aa0000' : '#0000aa';
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === IDLE) {
+              yOffset = anim.breatheOffset;
+          } else if (anim.state === WALKING) {
+              yOffset = Math.sin(anim.walkCycle) * 3;
+          } else if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          ctx.save();
+          
+          // Apply hurt animation rotation
+          if (anim.state === HURT) {
+              const centerX = screenX + PLAYER_WIDTH / 2;
+              const centerY = screenY + PLAYER_HEIGHT / 2;
+              
+              ctx.translate(centerX, centerY);
+              ctx.rotate(anim.hurtAngle);
+              ctx.translate(-centerX, -centerY);
+          }
+          
+          // Draw stick figure
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = outlineColor;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + 15 + yOffset, 10, 0, Math.PI * 2);
+          ctx.fillStyle = playerColor;
+          ctx.fill();
+          ctx.stroke();
+          
+          // Body
+          ctx.beginPath();
+          ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 25 + yOffset);
+          ctx.lineTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+          ctx.stroke();
+          
+          // Draw arms based on animation state
+          if (anim.state === HITTING) {
+              // Hitting animation - extend one arm
+              const punchExtension = 10;
+              const facingLeft = playerId === 'player2';
+              
+              // Back arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Punching arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 - punchExtension : 25 + punchExtension),
+                  screenY + 30 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === KICKING) {
+              // Kicking animation - extend one leg
+              const kickExtension = 15;
+              const facingLeft = playerId === 'player2';
+              
+              // Arms in ready position
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Standing leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 5 : -5),
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              // Kicking leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 - kickExtension : 30 + kickExtension),
+                  screenY + 60 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === BLOCKING) {
+              // Blocking animation - arms crossed in front
+              const facingLeft = playerId === 'player2';
+              
+              // Arms crossed in X shape
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 25 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Draw block shield effect
+              ctx.beginPath();
+              ctx.arc(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 35 + yOffset,
+                  15,
+                  0,
+                  Math.PI * 2
+              );
+              ctx.fillStyle = `rgba(255, 200, 50, 0.3)`;
+              ctx.fill();
+              ctx.strokeStyle = `rgba(255, 200, 50, 0.7)`;
+              ctx.stroke();
+              
+              // Legs in stable stance
+              ctx.strokeStyle = outlineColor;
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === VICTORY) {
+              // Victory animation - arms up
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === DEFEAT) {
+              // Defeat animation - slumped over
+              
+              // Arms hanging down
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              // Legs crumpled
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 75 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 75 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === WALKING) {
+              // Walking animation
+              const walkOffset = Math.sin(anim.walkCycle);
+              const facingLeft = playerId === 'player2';
+              
+              // Arms swinging
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15) + walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15) - walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Legs walking
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 - walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+          } else {
+              // Default idle pose
+              
+              // Arms
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw background
+      function drawBackground() {
+          // Simple gradient background
+          const gradient = ctx.createLinearGradient(0, 0, 0, gameHeight);
+          gradient.addColorStop(0, '#4a6a8a');
+          gradient.addColorStop(1, '#2a3a4a');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, gameWidth, gameHeight);
+          
+          // Draw floor
+          ctx.fillStyle = '#554433';
+          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
+      }
+
+      // Show winner message
+      function showWinner(winnerId) {
+          const winnerMessage = document.getElementById('winnerMessage');
+          const winnerText = document.getElementById('winnerText');
+          
+          // Set winner text
+          winnerText.textContent = `${winnerId === 'player1' ? 'Player 1' : 'Player 2'} Wins!`;
+          
+          // Show the message
+          winnerMessage.style.display = 'block';
+          
+          // Reset ready status
+          updateReadyStatus();
+          
+          // Play victory sound
+          playSound('victory');
       }
 
       // Draw hitboxes for debugging
@@ -1437,6 +2095,14 @@
               ctx.stroke();
           }
           
+          // Draw block area if blocking
+          if (p1Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.body.x + 15, p1Hitbox.body.y, 20, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
           // Draw player 2 hitboxes
           ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
           
@@ -1467,577 +2133,15 @@
               ctx.stroke();
           }
           
-          ctx.restore();
-      }
-      
-      function drawBackground() {
-          // Sky gradient
-          const skyGradient = ctx.createLinearGradient(0, 0, 0, gameHeight - 50);
-          skyGradient.addColorStop(0, '#1a2a3a');
-          skyGradient.addColorStop(1, '#3a4a5a');
-          ctx.fillStyle = skyGradient;
-          ctx.fillRect(0, 0, gameWidth, gameHeight - 50);
-          
-          // Draw distant mountains
-          drawMountains();
-          
-          // Floor gradient with texture
-          const floorGradient = ctx.createLinearGradient(0, gameHeight - 50, 0, gameHeight);
-          floorGradient.addColorStop(0, '#554433');
-          floorGradient.addColorStop(1, '#443322');
-          ctx.fillStyle = floorGradient;
-          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
-          
-          // Draw floor texture
-          drawFloorTexture();
-          
-          // Draw floor edge highlight
-          ctx.strokeStyle = '#665544';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 50);
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.stroke();
-          
-          // Draw some scattered rocks
-          drawRocks();
-      }
-
-      function drawMountains() {
-          ctx.fillStyle = '#2a3a4a';
-          
-          // First mountain range (far)
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 100);
-          
-          // Create a series of mountain peaks
-          const peaks = 5;
-          const peakWidth = gameWidth / peaks;
-          
-          for (let i = 0; i <= peaks; i++) {
-              const x = i * peakWidth;
-              const height = 30 + Math.random() * 40;
-              
-              if (i === 0) {
-                  ctx.lineTo(x, gameHeight - 100);
-              } else {
-                  const cpx1 = x - peakWidth * 0.7;
-                  const cpy1 = gameHeight - 100 - height * 0.3;
-                  const cpx2 = x - peakWidth * 0.3;
-                  const cpy2 = gameHeight - 100 - height * 0.7;
-                  
-                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 100 - height);
-                  
-                  const cpx3 = x + peakWidth * 0.3;
-                  const cpy3 = gameHeight - 100 - height * 0.7;
-                  const cpx4 = x + peakWidth * 0.7;
-                  const cpy4 = gameHeight - 100 - height * 0.3;
-                  
-                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth, gameHeight - 100);
-              }
-          }
-          
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.lineTo(0, gameHeight - 50);
-          ctx.closePath();
-          ctx.fill();
-          
-          // Second mountain range (closer, darker)
-          ctx.fillStyle = '#1a2a3a';
-          ctx.beginPath();
-          ctx.moveTo(0, gameHeight - 70);
-          
-          const peaks2 = 7;
-          const peakWidth2 = gameWidth / peaks2;
-          
-          for (let i = 0; i <= peaks2; i++) {
-              const x = i * peakWidth2;
-              const height = 20 + Math.random() * 30;
-              
-              if (i === 0) {
-                  ctx.lineTo(x, gameHeight - 70);
-              } else {
-                  const cpx1 = x - peakWidth2 * 0.7;
-                  const cpy1 = gameHeight - 70 - height * 0.3;
-                  const cpx2 = x - peakWidth2 * 0.3;
-                  const cpy2 = gameHeight - 70 - height * 0.7;
-                  
-                  ctx.bezierCurveTo(cpx1, cpy1, cpx2, cpy2, x, gameHeight - 70 - height);
-                  
-                  const cpx3 = x + peakWidth2 * 0.3;
-                  const cpy3 = gameHeight - 70 - height * 0.7;
-                  const cpx4 = x + peakWidth2 * 0.7;
-                  const cpy4 = gameHeight - 70 - height * 0.3;
-                  
-                  ctx.bezierCurveTo(cpx3, cpy3, cpx4, cpy4, x + peakWidth2, gameHeight - 70);
-              }
-          }
-          
-          ctx.lineTo(gameWidth, gameHeight - 50);
-          ctx.lineTo(0, gameHeight - 50);
-          ctx.closePath();
-          ctx.fill();
-      }
-
-      function drawFloorTexture() {
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
-          ctx.lineWidth = 1;
-          
-          // Draw horizontal texture lines
-          for (let y = gameHeight - 45; y < gameHeight; y += 5) {
+          // Draw block area if blocking
+          if (p2Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
               ctx.beginPath();
-              ctx.moveTo(0, y);
-              ctx.lineTo(gameWidth, y);
+              ctx.arc(p2Hitbox.body.x - 15, p2Hitbox.body.y, 20, 0, Math.PI * 2);
               ctx.stroke();
-          }
-          
-          // Draw some vertical cracks
-          const cracks = 12;
-          ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-          
-          for (let i = 0; i < cracks; i++) {
-              const x = Math.random() * gameWidth;
-              const length = 5 + Math.random() * 15;
-              const startY = gameHeight - 50 + Math.random() * 10;
-              
-              ctx.beginPath();
-              ctx.moveTo(x, startY);
-              
-              // Create a jagged line for the crack
-              let currentY = startY;
-              const segments = 3 + Math.floor(Math.random() * 3);
-              const segmentLength = length / segments;
-              
-              for (let j = 0; j < segments; j++) {
-                  const nextX = x + (Math.random() * 6 - 3);
-                  currentY += segmentLength;
-                  ctx.lineTo(nextX, currentY);
-              }
-              
-              ctx.stroke();
-          }
-      }
-
-      function drawRocks() {
-          // Draw some scattered rocks on the floor
-          const rockCount = 8 + Math.floor(gameWidth / 100);
-          
-          for (let i = 0; i < rockCount; i++) {
-              const x = Math.random() * gameWidth;
-              const y = gameHeight - 50 + Math.random() * 10;
-              const size = 2 + Math.random() * 4;
-              
-              // Don't draw rocks in the center area where players fight
-              if (x > gameWidth * 0.4 && x < gameWidth * 0.6) continue;
-              
-              ctx.fillStyle = `rgba(100, 100, 100, ${0.3 + Math.random() * 0.4})`;
-              ctx.beginPath();
-              ctx.arc(x, y, size, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Add a highlight
-              ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-              ctx.beginPath();
-              ctx.arc(x - size * 0.3, y - size * 0.3, size * 0.4, 0, Math.PI * 2);
-              ctx.fill();
-          }
-      }
-      
-      function drawPlayers() {
-          if (!players.player1 || !players.player2) return;
-          
-          // Calculate scale factor based on screen width to keep players visible
-          const scaleFactor = Math.min(1, gameWidth / 800);
-          const floorY = gameHeight - 50;
-          
-          // Adjust player positions for smaller screens
-          const p1ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player1.x * scaleFactor));
-          const p2ScreenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players.player2.x * scaleFactor));
-          
-          // Draw player 1
-          drawAnimatedStickman(
-              p1ScreenX, 
-              floorY - PLAYER_HEIGHT, 
-              '#FF5555', 
-              'player1', 
-              false
-          );
-          
-          // Draw player 2
-          drawAnimatedStickman(
-              p2ScreenX, 
-              floorY - PLAYER_HEIGHT, 
-              '#5555FF', 
-              'player2', 
-              true
-          );
-      }
-      
-      function drawAnimatedStickman(x, y, color, playerId, facingLeft) {
-          const anim = playerAnimations[playerId];
-          const state = anim.state;
-          
-          ctx.save();
-          
-          // Apply victory jump animation
-          let yOffset = 0;
-          if (state === VICTORY) {
-              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
-          }
-          
-          // Apply defeat fall animation
-          if (state === DEFEAT) {
-              // Rotate the entire stickman
-              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
-              ctx.rotate(Math.PI / 2 * anim.defeatFall);
-              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
-              
-              // Add a falling effect
-              yOffset = anim.defeatFall * 20;
-          }
-          
-          // Apply hurt animation
-          if (state === HURT) {
-              // Rotate the entire stickman
-              ctx.translate(x + PLAYER_WIDTH / 2, y + PLAYER_HEIGHT / 2);
-              ctx.rotate(anim.hurtAngle);
-              ctx.translate(-(x + PLAYER_WIDTH / 2), -(y + PLAYER_HEIGHT / 2));
-          }
-          
-          // Flip if facing left
-          if (facingLeft) {
-              ctx.translate(x + PLAYER_WIDTH / 2, 0);
-              ctx.scale(-1, 1);
-              ctx.translate(-x - PLAYER_WIDTH / 2, 0);
-          }
-          
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 4;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          
-          // Add breathing animation for idle
-          let breatheOffset = 0;
-          if (state === IDLE) {
-              breatheOffset = anim.breatheOffset;
-          }
-          
-          // Add walking animation
-          let legOffset = 0;
-          let armOffset = 0;
-          if (state === WALKING) {
-              legOffset = Math.sin(anim.walkCycle) * 10;
-              armOffset = Math.sin(anim.walkCycle + Math.PI) * 5;
-          }
-          
-          // Head with slight bobbing
-          ctx.beginPath();
-          ctx.arc(
-              x + PLAYER_WIDTH / 2, 
-              y + 10 + breatheOffset + yOffset, 
-              10, 
-              0, 
-              Math.PI * 2
-          );
-          ctx.stroke();
-          
-          // Body with slight breathing movement
-          ctx.beginPath();
-          ctx.moveTo(
-              x + PLAYER_WIDTH / 2, 
-              y + 20 + breatheOffset + yOffset
-          );
-          ctx.lineTo(
-              x + PLAYER_WIDTH / 2, 
-              y + 50 + yOffset
-          );
-          ctx.stroke();
-          
-          // Arms based on state
-          if (state === HITTING) {
-              // Hitting pose with animation
-              const hitExtension = Math.sin(animationFrame * 2) * 5;
-              
-              // Extended punching arm
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 20 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH + 15 + hitExtension, y + 25 + yOffset);
-              ctx.stroke();
-              
-              // Rear arm
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 40 + yOffset);
-              ctx.stroke();
-          } else if (state === KICKING) {
-              // Kicking pose with animation
-              // Arms in balance position
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 25 + yOffset);
-              ctx.stroke();
-          } else if (state === VICTORY) {
-              // Victory pose - arms up
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 15 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH, y + 5 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 15 + yOffset);
-              ctx.lineTo(x, y + 5 + yOffset);
-              ctx.stroke();
-          } else if (state === DEFEAT) {
-              // Defeat pose - limp arms
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5, y + 45 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5, y + 45 + yOffset);
-              ctx.stroke();
-          } else {
-              // Normal or walking pose
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 5 + armOffset, y + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 30 + yOffset);
-              ctx.lineTo(x + 5 - armOffset, y + 25 + yOffset);
-              ctx.stroke();
-          }
-          
-          // Legs based on state
-          if (state === KICKING) {
-              // Kicking pose with animation
-              const kickExtension = Math.sin(animationFrame * 2) * 5;
-              
-              // Standing leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 70 + yOffset);
-              ctx.stroke();
-              
-              // Kicking leg
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH + 20 + kickExtension, y + 60 + yOffset);
-              ctx.stroke();
-          } else if (state === VICTORY) {
-              // Victory pose - slight bounce in legs
-              const bounce = Math.sin(anim.victoryJump * 2) * 3;
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10 - bounce, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10 + bounce, y + 70 + yOffset);
-              ctx.stroke();
-          } else if (state === DEFEAT) {
-              // Defeat pose - limp legs
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 60 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 60 + yOffset);
-              ctx.stroke();
-          } else if (state === WALKING) {
-              // Walking animation
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10 + legOffset, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10 - legOffset, y + 70 + yOffset);
-              ctx.stroke();
-          } else {
-              // Normal pose
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + 10, y + 70 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(x + PLAYER_WIDTH / 2, y + 50 + yOffset);
-              ctx.lineTo(x + PLAYER_WIDTH - 10, y + 70 + yOffset);
-              ctx.stroke();
-          }
-          
-          // If hurt, draw stars around head
-          if (state === HURT) {
-              ctx.strokeStyle = 'yellow';
-              for (let i = 0; i < 3; i++) {
-                  const angle = Math.PI * 2 * i / 3 + animationFrame;
-                  const distance = 20 + Math.sin(animationFrame) * 5;
-                  const starX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
-                  const starY = y + 10 + Math.sin(angle) * distance + yOffset;
-                  
-                  // Draw animated stars
-                  const starSize = 5 + Math.sin(animationFrame * 2 + i) * 2;
-                  
-                  ctx.beginPath();
-                  ctx.moveTo(starX - starSize, starY);
-                  ctx.lineTo(starX + starSize, starY);
-                  ctx.stroke();
-                  
-                  ctx.beginPath();
-                  ctx.moveTo(starX, starY - starSize);
-                  ctx.lineTo(starX, starY + starSize);
-                  ctx.stroke();
-              }
-          }
-          
-          // Draw victory sparkles
-          if (state === VICTORY) {
-              ctx.strokeStyle = 'gold';
-              for (let i = 0; i < 5; i++) {
-                  const angle = Math.PI * 2 * i / 5 + animationFrame * 0.5;
-                  const distance = 30 + Math.sin(animationFrame + i) * 10;
-                  const sparkleX = x + PLAYER_WIDTH / 2 + Math.cos(angle) * distance;
-                  const sparkleY = y + 30 + Math.sin(angle) * distance + yOffset;
-                  
-                  // Draw animated sparkles
-                  const sparkleSize = 3 + Math.sin(animationFrame * 3 + i) * 2;
-                  
-                  // Draw a star shape
-                  ctx.beginPath();
-                  for (let j = 0; j < 5; j++) {
-                      const starAngle = Math.PI * 2 * j / 5 + animationFrame;
-                      const starX = sparkleX + Math.cos(starAngle) * sparkleSize;
-                      const starY = sparkleY + Math.sin(starAngle) * sparkleSize;
-                      
-                      if (j === 0) {
-                          ctx.moveTo(starX, starY);
-                      } else {
-                          ctx.lineTo(starX, starY);
-                      }
-                  }
-                  ctx.closePath();
-                  ctx.stroke();
-              }
           }
           
           ctx.restore();
-      }
-      
-      function drawPowerBars() {
-          if (!players.player1 || !players.player2) return;
-          
-          const barHeight = 15;
-          const margin = 10;
-          
-          // Responsive bar width based on screen size
-          const barWidth = Math.min(200, (gameWidth / 2) - 20);
-          
-          // Player 1 power bar
-          ctx.fillStyle = '#333';
-          ctx.fillRect(margin, margin, barWidth, barHeight);
-          
-          // Animate power bar when taking damage
-          let p1PowerWidth = (players.player1.power / MAX_POWER) * barWidth;
-          
-          // Add pulsing effect when low health
-          if (players.player1.power < MAX_POWER * 0.3) {
-              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
-              ctx.fillStyle = `rgba(255, 85, 85, ${pulse})`;
-          } else {
-              ctx.fillStyle = '#FF5555';
-          }
-          
-          ctx.fillRect(margin, margin, p1PowerWidth, barHeight);
-          
-          ctx.strokeStyle = '#FFF';
-          ctx.strokeRect(margin, margin, barWidth, barHeight);
-          
-          ctx.fillStyle = '#FFF';
-          ctx.font = '12px Arial';
-          ctx.fillText('Player 1', margin, margin + barHeight + 12);
-          
-          // Player 2 power bar
-          ctx.fillStyle = '#333';
-          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          // Animate power bar when taking damage
-          let p2PowerWidth = (players.player2.power / MAX_POWER) * barWidth;
-          
-          // Add pulsing effect when low health
-          if (players.player2.power < MAX_POWER * 0.3) {
-              const pulse = Math.sin(animationFrame * 2) * 0.1 + 0.9;
-              ctx.fillStyle = `rgba(85, 85, 255, ${pulse})`;
-          } else {
-              ctx.fillStyle = '#5555FF';
-          }
-          
-          ctx.fillRect(gameWidth - margin - p2PowerWidth, margin, p2PowerWidth, barHeight);
-          
-          ctx.strokeStyle = '#FFF';
-          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          ctx.fillStyle = '#FFF';
-          ctx.font = '12px Arial';
-          ctx.fillText('Player 2', gameWidth - margin - barWidth, margin + barHeight + 12);
-      }
-      
-      function showWinner(winner) {
-          const winnerMessage = document.getElementById('winnerMessage');
-          const winnerText = document.getElementById('winnerText');
-          
-          // Format winner text nicely
-          winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
-          
-          // Make sure the display is set to block
-          winnerMessage.style.display = 'block';
-          
-          // Play victory sound
-          playSound('victory');
-          
-          // Reset ready status indicators
-          document.getElementById('player1Status').className = 'status-indicator status-waiting';
-          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
-          document.getElementById('player2Status').className = 'status-indicator status-waiting';
-          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
-          
-          // Reset restart button
-          const restartBtn = document.getElementById('restartBtn');
-          restartBtn.textContent = 'Play Again';
-          restartBtn.disabled = false;
-          
-          // Clear ready players array
-          readyPlayers = [];
-          
-          // Ensure animations continue to run
-          if (winner === 'player1') {
-              playerAnimations.player1.state = VICTORY;
-              playerAnimations.player2.state = DEFEAT;
-          } else {
-              playerAnimations.player2.state = VICTORY;
-              playerAnimations.player1.state = DEFEAT;
-          }
-          
-          // Reset hit feedback
-          hitFeedback.active = false;
-          
-          console.log(`Winner screen displayed for ${winner}`);
       }
   </script>
 </body>
