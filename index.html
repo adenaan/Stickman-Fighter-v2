@@ -662,6 +662,34 @@
                   
                   // Play button sound when a player gets ready
                   playSound('button');
+                  
+                  // Check if both players are ready
+                  if (readyPlayers.includes('player1') && readyPlayers.includes('player2')) {
+                      debug("Both players ready, restarting game");
+                      
+                      // Hide winner message
+                      document.getElementById('winnerMessage').style.display = 'none';
+                      
+                      // Reset game state locally
+                      resetGameState();
+                      
+                      // Tell the server to restart the game
+                      socket.emit('restartGame');
+                  }
+              });
+
+              // Add a new socket event handler for game restart confirmation
+              socket.on('gameRestarted', function() {
+                  debug("Game has been restarted by server");
+                  
+                  // Hide winner message if it's still showing
+                  document.getElementById('winnerMessage').style.display = 'none';
+                  
+                  // Reset game state
+                  resetGameState();
+                  
+                  // Play game start sound
+                  playSound('gameStart');
               });
           } catch (error) {
               console.error('Error connecting to server:', error);
@@ -889,6 +917,7 @@
       function setupKeyboardControls() {
           // Remove any existing event listeners
           window.removeEventListener('keydown', handleKeyDown);
+          
           window.removeEventListener('keyup', handleKeyUp);
           
           // Add event listeners
