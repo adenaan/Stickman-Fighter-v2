@@ -555,7 +555,7 @@
                   // Check if a player's health just reached zero
                   const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
                   const player2Defeated = prevPlayer2Power > 0 && players.player2.power <= 0;
-                  
+
                   // If a player was just defeated, start the game ending sequence
                   if ((player1Defeated || player2Defeated) && !gameEnding) {
                       gameEnding = true;
@@ -565,9 +565,17 @@
                       if (player1Defeated) {
                           playerAnimations.player1.state = DEFEAT;
                           playerAnimations.player2.state = VICTORY;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player2');
+                          winnerAnnounced = true;
                       } else if (player2Defeated) {
                           playerAnimations.player1.state = VICTORY;
                           playerAnimations.player2.state = DEFEAT;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player1');
+                          winnerAnnounced = true;
                       }
                       
                       // Play hurt sound for the defeated player
@@ -1041,6 +1049,7 @@
           // Update player animations
           updatePlayerAnimations(deltaTime);
 
+          /*
           // Check for game ending sequence
           if (gameEnding && gameState.winner && !winnerAnnounced) {
               const now = performance.now();
@@ -1050,6 +1059,7 @@
                   winnerAnnounced = true;
               }
           }
+          */
 
           // Update hit detection (only if game is active and not ending)
           if (gameStarted && !gameEnding) {
@@ -1961,14 +1971,12 @@
       
       function showWinner(winner) {
           const winnerMessage = document.getElementById('winnerMessage');
-          
-          // Don't show the message if it's already visible
-          if (winnerMessage.style.display === 'block') return;
-          
           const winnerText = document.getElementById('winnerText');
           
           // Format winner text nicely
           winnerText.textContent = `${winner === 'player1' ? 'Player 1' : 'Player 2'} wins!`;
+          
+          // Make sure the display is set to block
           winnerMessage.style.display = 'block';
           
           // Play victory sound
@@ -1999,6 +2007,8 @@
           
           // Reset hit feedback
           hitFeedback.active = false;
+          
+          console.log(`Winner screen displayed for ${winner}`);
       }
   </script>
 </body>
