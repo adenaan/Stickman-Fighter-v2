@@ -1,764 +1,2450 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fighting Game</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            overflow: hidden;
-            background-color: #222;
-            color: white;
-        }
-
-        #game-container {
-            position: relative;
-            width: 800px;
-            height: 400px;
-            margin: 20px auto;
-            background-color: #333;
-            border: 2px solid #555;
-            overflow: hidden;
-        }
-
-        .player {
-            position: absolute;
-            width: 50px;
-            height: 100px;
-            bottom: 0;
-            transition: transform 0.1s;
-        }
-
-        #player1 {
-            left: 200px;
-            background-color: #4a8;
-        }
-
-        #player2 {
-            left: 600px;
-            background-color: #48a;
-        }
-
-        .health-bar-container {
-            position: absolute;
-            top: 10px;
-            width: 200px;
-            height: 20px;
-            background-color: #333;
-            border: 2px solid #555;
-        }
-
-        #player1-health-container {
-            left: 10px;
-        }
-
-        #player2-health-container {
-            right: 10px;
-        }
-
-        .health-bar {
-            height: 100%;
-            width: 100%;
-            background-color: #4a8;
-            transition: width 0.3s;
-        }
-
-        #player2-health {
-            background-color: #48a;
-        }
-
-        .controls {
-            display: flex;
-            justify-content: space-between;
-            width: 800px;
-            margin: 20px auto;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        button {
-            padding: 10px 15px;
-            background-color: #555;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-
-        button:hover {
-            background-color: #666;
-        }
-
-        button:active {
-            background-color: #777;
-        }
-
-        #game-status {
-            text-align: center;
-            margin: 10px 0;
-            font-size: 24px;
-            font-weight: bold;
-            height: 30px;
-        }
-
-        #restart-container {
-            text-align: center;
-            margin: 10px 0;
-            display: none;
-        }
-
-        /* Player state styles */
-        .hitting {
-            background-color: #a44 !important;
-        }
-
-        .kicking {
-            background-color: #a84 !important;
-        }
-
-        .hurt {
-            background-color: #a44 !important;
-            animation: shake 0.2s ease-in-out;
-        }
-
-        .blocking {
-            border: 3px solid #aa4 !important;
-        }
-
-        /* NEW: Invulnerability effect */
-        .invulnerable {
-            animation: flash 0.5s infinite alternate;
-            opacity: 0.7;
-            border: 3px dashed #4af !important;
-        }
-
-        @keyframes flash {
-            from { opacity: 0.7; }
-            to { opacity: 0.3; }
-        }
-
-        @keyframes shake {
-            0% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-5px); }
-            100% { transform: translateX(0); }
-        }
-
-        /* NEW: Combo counter */
-        .combo-counter {
-            position: absolute;
-            color: #f44;
-            font-weight: bold;
-            font-size: 24px;
-            text-shadow: 2px 2px 3px black;
-            z-index: 100;
-            display: none;
-            pointer-events: none;
-        }
-
-        /* NEW: Cooldown indicator */
-        .cooldown-indicator {
-            position: absolute;
-            bottom: -20px;
-            left: 0;
-            width: 100%;
-            height: 5px;
-            background-color: #f44;
-            transform-origin: left;
-            transform: scaleX(0);
-        }
-
-        /* NEW: Status effects */
-        .status-effect {
-            position: absolute;
-            top: -25px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            font-weight: bold;
-            color: white;
-            text-shadow: 1px 1px 2px black;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Stickman Fighter with Blocking</title>
+  <!-- Load Socket.io from CDN -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+      body {
+          margin: 0;
+          padding: 0;
+          overflow: hidden;
+          touch-action: none;
+          background-color: #222;
+          font-family: Arial, sans-serif;
+      }
+      #gameContainer {
+          position: relative;
+          width: 100vw;
+          height: 100vh;
+          overflow: hidden;
+      }
+      #gameCanvas {
+          background-color: #333;
+          position: absolute;
+          top: 0;
+          left: 0;
+      }
+      .controls {
+          position: fixed;
+          bottom: 30px;
+          width: 100%;
+          padding: 0 10px;
+          box-sizing: border-box;
+          z-index: 10;
+          display: flex;
+          justify-content: center;
+      }
+      .player-controls {
+          display: flex;
+          gap: 12px;
+          margin-bottom: 15px;
+      }
+      .control-btn {
+          width: 65px;
+          height: 65px;
+          border-radius: 50%;
+          border: none;
+          background-color: rgba(255, 255, 255, 0.3);
+          color: white;
+          font-weight: bold;
+          font-size: 18px;
+          touch-action: manipulation;
+          user-select: none;
+          -webkit-user-select: none;
+          transition: all 0.1s ease;
+          position: relative;
+          box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+      }
+      /* Button press effect */
+      .control-btn.active {
+          transform: scale(0.95) translateY(4px);
+          box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+      }
+      @media (max-width: 480px) {
+          .control-btn {
+              width: 55px;
+              height: 55px;
+              font-size: 16px;
+          }
+          .player-controls {
+              gap: 10px;
+          }
+      }
+      @media (max-width: 360px) {
+          .control-btn {
+              width: 45px;
+              height: 45px;
+              font-size: 14px;
+          }
+          .player-controls {
+              gap: 8px;
+          }
+      }
+      .hit-btn {
+          background-color: rgba(255, 50, 50, 0.7);
+      }
+      .hit-btn.active {
+          background-color: rgba(255, 50, 50, 0.9);
+      }
+      .kick-btn {
+          background-color: rgba(50, 50, 255, 0.7);
+      }
+      .kick-btn.active {
+          background-color: rgba(50, 50, 255, 0.9);
+      }
+      .move-btn {
+          background-color: rgba(50, 200, 50, 0.7);
+      }
+      .move-btn.active {
+          background-color: rgba(50, 200, 50, 0.9);
+      }
+      /* New block button style */
+      .block-btn {
+          background-color: rgba(255, 200, 50, 0.7);
+      }
+      .block-btn.active {
+          background-color: rgba(255, 200, 50, 0.9);
+      }
+      /* Button ripple effect */
+      .control-btn::after {
+          content: '';
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          width: 5px;
+          height: 5px;
+          background: rgba(255, 255, 255, 0.5);
+          opacity: 0;
+          border-radius: 100%;
+          transform: scale(1, 1) translate(-50%, -50%);
+          transform-origin: 50% 50%;
+      }
+      .control-btn.active::after {
+          animation: ripple 0.4s ease-out;
+      }
+      @keyframes ripple {
+          0% {
+              transform: scale(0, 0) translate(-50%, -50%);
+              opacity: 0.5;
+          }
+          100% {
+              transform: scale(20, 20) translate(-50%, -50%);
+              opacity: 0;
+          }
+      }
+      #winnerMessage {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background-color: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 30px;
+          border-radius: 10px;
+          font-size: 24px;
+          display: none;
+          text-align: center;
+          z-index: 20;
+          width: 80%;
+          max-width: 300px;
+      }
+      #restartBtn {
+          margin-top: 20px;
+          padding: 15px 30px;
+          background-color: #4CAF50;
+          color: white;
+          border: none;
+          border-radius: 5px;
+          cursor: pointer;
+          font-size: 18px;
+          touch-action: manipulation;
+          transition: all 0.1s ease;
+          box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
+      }
+      #restartBtn:active {
+          transform: scale(0.95) translateY(4px);
+          box-shadow: 0 0 0 rgba(0, 0, 0, 0.2);
+          background-color: #3e8e41;
+      }
+      #restartBtn:disabled {
+          background-color: #888;
+          cursor: default;
+          transform: none;
+          box-shadow: none;
+      }
+      #waitingMessage {
+          position: fixed;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          background-color: rgba(0, 0, 0, 0.7);
+          color: white;
+          padding: 20px;
+          border-radius: 10px;
+          font-size: 20px;
+          text-align: center;
+          z-index: 20;
+          width: 80%;
+          max-width: 300px;
+      }
+      #playerIndicator {
+          position: fixed;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px 10px;
+          border-radius: 5px;
+          font-size: 16px;
+          z-index: 30;
+          text-align: center;
+      }
+      #debugInfo {
+          position: fixed;
+          top: 40px;
+          left: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          font-size: 12px;
+          z-index: 30;
+          display: none;
+      }
+      /* Add a game area container to help with positioning */
+      #gameArea {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: calc(100% - 130px); /* Reserve space for controls */
+          overflow: hidden;
+      }
+      /* Player ready status styles */
+      .player-status {
+          margin-top: 10px;
+          display: flex;
+          justify-content: space-between;
+          width: 100%;
+      }
+      .status-indicator {
+          padding: 5px 10px;
+          border-radius: 5px;
+          font-size: 14px;
+          font-weight: bold;
+      }
+      .status-waiting {
+          color: #ff5555;
+      }
+      .status-ready {
+          color: #55ff55;
+      }
+      /* Sound control styles */
+      #soundControl {
+          position: fixed;
+          top: 10px;
+          right: 10px;
+          background-color: rgba(0, 0, 0, 0.5);
+          color: white;
+          padding: 5px;
+          border-radius: 5px;
+          z-index: 30;
+          cursor: pointer;
+          width: 30px;
+          height: 30px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+      }
+      /* Block indicator styles */
+      .block-indicator {
+          position: absolute;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          background-color: rgba(255, 200, 50, 0.5);
+          border: 2px solid rgba(255, 200, 50, 0.8);
+          display: none;
+          z-index: 5;
+          animation: pulse 1s infinite;
+      }
+      @keyframes pulse {
+          0% { transform: scale(1); opacity: 0.7; }
+          50% { transform: scale(1.1); opacity: 0.9; }
+          100% { transform: scale(1); opacity: 0.7; }
+      }
+      /* Block cooldown indicator */
+      .block-cooldown {
+          position: absolute;
+          bottom: -10px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 100%;
+          height: 5px;
+          background-color: rgba(255, 255, 255, 0.3);
+          border-radius: 2px;
+          overflow: hidden;
+      }
+      .block-cooldown-fill {
+          height: 100%;
+          width: 100%;
+          background-color: rgba(255, 200, 50, 0.8);
+          transform-origin: left;
+      }
+      /* NEW: Invulnerability effect */
+      .invulnerable-effect {
+          position: absolute;
+          width: 60px;
+          height: 100px;
+          border-radius: 30px;
+          background-color: rgba(74, 144, 226, 0.3);
+          border: 2px dashed rgba(74, 144, 226, 0.8);
+          display: none;
+          z-index: 4;
+          animation: invulnerable-flash 0.5s infinite alternate;
+      }
+      @keyframes invulnerable-flash {
+          0% { opacity: 0.3; }
+          100% { opacity: 0.7; }
+      }
+      /* NEW: Combo counter */
+      .combo-counter {
+          position: absolute;
+          color: #ff4444;
+          font-weight: bold;
+          font-size: 24px;
+          text-shadow: 2px 2px 3px black;
+          z-index: 100;
+          display: none;
+          pointer-events: none;
+          text-align: center;
+          width: 100px;
+          transform: translateX(-50%);
+      }
+  </style>
 </head>
 <body>
-    <div id="game-container">
-        <div class="health-bar-container" id="player1-health-container">
-            <div class="health-bar" id="player1-health"></div>
-        </div>
-        
-        <div class="health-bar-container" id="player2-health-container">
-            <div class="health-bar" id="player2-health"></div>
-        </div>
-        
-        <div id="player1" class="player">
-            <div class="cooldown-indicator" id="player1-cooldown"></div>
-            <div class="status-effect" id="player1-status"></div>
-        </div>
-        
-        <div id="player2" class="player">
-            <div class="cooldown-indicator" id="player2-cooldown"></div>
-            <div class="status-effect" id="player2-status"></div>
-        </div>
-    </div>
-    
-    <div id="game-status">Waiting for players...</div>
-    
-    <div id="restart-container">
-        <button id="ready-button">Ready</button>
-    </div>
-    
-    <div class="controls">
-        <div class="control-group" id="player1-controls">
-            <h3>Player 1 Controls</h3>
-            <div>
-                <button id="p1-left">Left (A)</button>
-                <button id="p1-right">Right (D)</button>
-                <button id="p1-hit">Hit (W)</button>
-                <button id="p1-kick">Kick (S)</button>
-                <button id="p1-block">Block (Q)</button>
-            </div>
-        </div>
-        
-        <div class="control-group" id="player2-controls">
-            <h3>Player 2 Controls</h3>
-            <div>
-                <button id="p2-left">Left (←)</button>
-                <button id="p2-right">Right (→)</button>
-                <button id="p2-hit">Hit (↑)</button>
-                <button id="p2-kick">Kick (↓)</button>
-                <button id="p2-block">Block (Enter)</button>
-            </div>
-        </div>
-    </div>
+  <div id="gameContainer">
+      <div id="playerIndicator"></div>
+      <div id="debugInfo"></div>
+      <div id="soundControl">🔊</div>
+      
+      <div id="gameArea">
+          <canvas id="gameCanvas"></canvas>
+      </div>
+      
+      <div class="controls" id="controlsContainer">
+          <!-- Control buttons will be added here dynamically -->
+      </div>
+      
+      <div id="winnerMessage">
+          <div id="winnerText"></div>
+          <div class="player-status">
+              <div id="player1Status" class="status-indicator status-waiting">Player 1: Waiting</div>
+              <div id="player2Status" class="status-indicator status-waiting">Player 2: Waiting</div>
+          </div>
+          <button id="restartBtn">Play Again</button>
+      </div>
+      
+      <div id="waitingMessage">
+          Connecting to server...
+      </div>
+  </div>
 
-    <!-- Combo counter elements -->
-    <div id="player1-combo" class="combo-counter"></div>
-    <div id="player2-combo" class="combo-counter"></div>
+  <!-- NEW: Add combo counter elements -->
+  <div id="player1-combo" class="combo-counter"></div>
+  <div id="player2-combo" class="combo-counter"></div>
 
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-        // Game constants
-        const ATTACK_COOLDOWN = 500; // ms
-        const ATTACK_DURATION = 300; // ms
-        const HURT_DURATION = 500; // ms
-        const HIT_RANGE = 40;
-        const KICK_RANGE = 50;
-        const HIT_DAMAGE = 10;
-        const KICK_DAMAGE = 15;
-        const CRITICAL_HIT_MULTIPLIER = 1.5;
-        const BLOCK_DURATION = 1000; // 1 second block duration
-        const BLOCK_COOLDOWN = 2000; // 2 second cooldown between blocks
-        const INVULNERABILITY_DURATION = 1500; // 1.5 seconds of invulnerability after being hit
+  <!-- NEW: Add invulnerability effect elements -->
+  <div id="player1-invulnerable" class="invulnerable-effect"></div>
+  <div id="player2-invulnerable" class="invulnerable-effect"></div>
 
-        // Game elements
-        const player1Element = document.getElementById('player1');
-        const player2Element = document.getElementById('player2');
-        const player1Health = document.getElementById('player1-health');
-        const player2Health = document.getElementById('player2-health');
-        const gameStatus = document.getElementById('game-status');
-        const restartContainer = document.getElementById('restart-container');
-        const readyButton = document.getElementById('ready-button');
-        const player1Cooldown = document.getElementById('player1-cooldown');
-        const player2Cooldown = document.getElementById('player2-cooldown');
-        const player1Status = document.getElementById('player1-status');
-        const player2Status = document.getElementById('player2-status');
-        const player1Combo = document.getElementById('player1-combo');
-        const player2Combo = document.getElementById('player2-combo');
+  <script>
+      // Game variables
+      let canvas, ctx;
+      let gameWidth, gameHeight;
+      let socket;
+      let playerId;
+      let players = {};
+      let gameStarted = false;
+      let readyPlayers = []; // Track which players are ready
+      let gameState = {};
+      let gameEnding = false; // Flag to track if the game is in the ending sequence
+      let gameEndTime = 0; // Time when the game ended
+      let winnerAnnounced = false; // Flag to track if the winner has been announced
 
-        // Game state
-        let playerId = null;
-        let gameState = null;
-        let keysPressed = {};
-        let lastAttackTime = 0;
-        let lastBlockTime = 0;
-        let blockCooldown = false;
+      // Hit detection variables
+      let lastHitTime = 0;
+      let hitFeedback = {
+          active: false,
+          x: 0,
+          y: 0,
+          type: '',
+          time: 0
+      };
 
-        // Connect to server
-        // Replace this URL with your actual Glitch server URL
-        const serverUrl = "https://https://stickmanfightingnew.glitch.me";
-        const socket = io(serverUrl);
+      // Block variables
+      let blockIndicators = {};
+      let blockCooldowns = {
+          player1: 0,
+          player2: 0
+      };
 
-        // Receive player ID
-        socket.on('playerId', (id) => {
-            playerId = id;
-            console.log('You are ' + playerId);
-            
-            if (playerId === 'observer') {
-                gameStatus.textContent = 'You are an observer';
-            } else {
-                gameStatus.textContent = 'Waiting for opponent...';
-            }
-        });
+      // NEW: Invulnerability variables
+      let invulnerabilityEffects = {};
+      let comboCounts = {
+          player1: 0,
+          player2: 0
+      };
+      let lastHitTimes = {
+          player1: 0,
+          player2: 0
+      };
 
-        // Receive game state
-        socket.on('gameState', (state) => {
-            gameState = state;
-            updateGameDisplay();
-        });
+      const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
+      
+      // Sound variables
+      let soundEnabled = true;
+      let sounds = {};
+      let soundsLoaded = false;
+      
+      // Game constants
+      const PLAYER_WIDTH = 30;
+      const PLAYER_HEIGHT = 80;
+      const PLAYER_SPEED = 5;
+      const MAX_POWER = 100;
+      const HIT_DAMAGE = 10;
+      const KICK_DAMAGE = 15;
+      const HIT_RANGE = 40;
+      const KICK_RANGE = 50;
+      const GAME_END_DELAY = 1500; // Delay before showing winner message (ms)
 
-        // Handle hit results
-        socket.on('hitResult', (data) => {
-            console.log('Hit result:', data);
-            
-            // Show hit effect
-            const targetElement = data.targetId === 'player1' ? player1Element : player2Element;
-            
-            if (data.invulnerable) {
-                // Show invulnerability effect
-                targetElement.classList.add('invulnerable');
-                
-                // Update status text
-                const statusElement = data.targetId === 'player1' ? player1Status : player2Status;
-                statusElement.textContent = 'INVULNERABLE';
-                statusElement.style.color = '#4af';
-                
-                // Clear after duration
-                setTimeout(() => {
-                    targetElement.classList.remove('invulnerable');
-                    statusElement.textContent = '';
-                }, INVULNERABILITY_DURATION);
-            }
-            
-            // Show combo counter if it's more than 1
-            if (data.comboCount && data.comboCount > 1) {
-                const comboElement = data.attackerId === 'player1' ? player1Combo : player2Combo;
-                const playerElement = data.attackerId === 'player1' ? player1Element : player2Element;
-                
-                // Position combo counter above player
-                const rect = playerElement.getBoundingClientRect();
-                const containerRect = document.getElementById('game-container').getBoundingClientRect();
-                
-                comboElement.style.left = (rect.left - containerRect.left + rect.width / 2 - 40) + 'px';
-                comboElement.style.top = (rect.top - containerRect.top - 40) + 'px';
-                comboElement.textContent = data.comboCount + 'x COMBO!';
-                comboElement.style.display = 'block';
-                
-                // Hide after a moment
-                setTimeout(() => {
-                    comboElement.style.display = 'none';
-                }, 1000);
-            }
-        });
+      // Block constants
+      const BLOCK_DURATION = 1000; // How long a block lasts (ms)
+      const BLOCK_COOLDOWN = 2000; // Cooldown before can block again (ms)
+      const BLOCK_DAMAGE_REDUCTION = 0.75; // Reduce damage by 75% when blocking
 
-        // Handle game restart
-        socket.on('gameRestarted', () => {
-            console.log('Game restarted');
-            restartContainer.style.display = 'none';
-        });
+      // NEW: Invulnerability constants
+      const INVULNERABILITY_DURATION = 1500; // 1.5 seconds of invulnerability after being hit
+      const COMBO_LIMIT = 3; // Maximum number of consecutive hits before forced invulnerability
+      const COMBO_RESET_TIME = 3000; // Time after which combo counter resets
 
-        // Handle player ready status
-        socket.on('playerReady', (readyPlayers) => {
-            console.log('Ready players:', readyPlayers);
-            
-            if (readyPlayers.includes(playerId)) {
-                readyButton.disabled = true;
-                readyButton.textContent = 'Waiting for opponent...';
-            }
-        });
+      // Hit detection constants
+      const HEAD_HITBOX_RADIUS = 10;
+      const BODY_HITBOX_WIDTH = 20;
+      const BODY_HITBOX_HEIGHT = 30;
+      const ARM_HITBOX_WIDTH = 30;
+      const LEG_HITBOX_WIDTH = 30;
+      const CRITICAL_HIT_MULTIPLIER = 1.5;
+      const HIT_COOLDOWN = 300; // ms
+      const HIT_FEEDBACK_DURATION = 200; // ms
+      
+      // Animation states
+      const IDLE = 'idle';
+      const HITTING = 'hitting';
+      const KICKING = 'kicking';
+      const BLOCKING = 'blocking'; // New blocking state
+      const HURT = 'hurt';
+      const WALKING = 'walking';
+      const VICTORY = 'victory';
+      const DEFEAT = 'defeat';
+      
+      // Animation variables
+      let animationFrame = 0;
+      const ANIMATION_SPEED = 0.1; // Lower is slower
+      let lastTime = 0;
+      
+      // Animation data for each player
+      const playerAnimations = {
+          player1: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: 1,
+              victoryJump: 0,
+              defeatFall: 0,
+              blockStart: 0 // When block started
+          },
+          player2: {
+              state: IDLE,
+              frame: 0,
+              breatheOffset: 0,
+              breatheDirection: 1,
+              walkCycle: 0,
+              hurtAngle: 0,
+              hurtDirection: -1,
+              victoryJump: 0,
+              defeatFall: 0,
+              blockStart: 0 // When block started
+          }
+      };
+      
+      // Debug function
+      function debug(message) {
+          const debugElement = document.getElementById('debugInfo');
+          debugElement.style.display = 'block';
+          debugElement.textContent = message;
+          console.log(message);
+      }
+      
+      // Initialize the game
+      window.onload = function() {
+          canvas = document.getElementById('gameCanvas');
+          ctx = canvas.getContext('2d');
+          
+          // Set canvas size
+          resizeCanvas();
+          window.addEventListener('resize', resizeCanvas);
+          
+          // Load sounds
+          loadSounds();
+          
+          // Set up sound control
+          setupSoundControl();
+          
+          // Connect to server automatically
+          connectToServer();
+          
+          // Set up restart button with multiple event types
+          setupRestartButton();
+          
+          // Create block indicators
+          createBlockIndicators();
+          
+          // NEW: Create invulnerability effects
+          createInvulnerabilityEffects();
+          
+          // Start game loop
+          lastTime = performance.now();
+          requestAnimationFrame(gameLoop);
+      };
+      
+      // NEW: Create invulnerability effects for both players
+      function createInvulnerabilityEffects() {
+          // Get the elements
+          const p1Effect = document.getElementById('player1-invulnerable');
+          const p2Effect = document.getElementById('player2-invulnerable');
+          
+          // Store references
+          invulnerabilityEffects = {
+              player1: p1Effect,
+              player2: p2Effect
+          };
+      }
+      
+      // Create block indicators for both players
+      function createBlockIndicators() {
+          // Create player 1 block indicator
+          const p1Indicator = document.createElement('div');
+          p1Indicator.className = 'block-indicator';
+          p1Indicator.id = 'player1BlockIndicator';
+          document.getElementById('gameArea').appendChild(p1Indicator);
+          
+          // Add cooldown bar for player 1
+          const p1Cooldown = document.createElement('div');
+          p1Cooldown.className = 'block-cooldown';
+          p1Indicator.appendChild(p1Cooldown);
+          
+          const p1CooldownFill = document.createElement('div');
+          p1CooldownFill.className = 'block-cooldown-fill';
+          p1CooldownFill.id = 'player1BlockCooldown';
+          p1Cooldown.appendChild(p1CooldownFill);
+          
+          // Create player 2 block indicator
+          const p2Indicator = document.createElement('div');
+          p2Indicator.className = 'block-indicator';
+          p2Indicator.id = 'player2BlockIndicator';
+          document.getElementById('gameArea').appendChild(p2Indicator);
+          
+          // Add cooldown bar for player 2
+          const p2Cooldown = document.createElement('div');
+          p2Cooldown.className = 'block-cooldown';
+          p2Indicator.appendChild(p2Cooldown);
+          
+          const p2CooldownFill = document.createElement('div');
+          p2CooldownFill.className = 'block-cooldown-fill';
+          p2CooldownFill.id = 'player2BlockCooldown';
+          p2Cooldown.appendChild(p2CooldownFill);
+          
+          // Store references
+          blockIndicators = {
+              player1: p1Indicator,
+              player2: p2Indicator
+          };
+      }
+      
+      // Load all game sounds
+      function loadSounds() {
+          const soundFiles = {
+              hit: '/Stickman-Fighter-v2/assets/punch.mp3',
+              kick: '/Stickman-Fighter-v2/assets/kick.mp3',
+              hurt: '/Stickman-Fighter-v2/assets/hurt.mp3',
+              victory: '/Stickman-Fighter-v2/assets/victory.mp3',
+              gameStart: '/Stickman-Fighter-v2/assets/game-start.mp3',
+              button: '/Stickman-Fighter-v2/assets/button-press.mp3',
+              block: '/Stickman-Fighter-v2/assets/block.mp3', // New block sound
+              blockHit: '/Stickman-Fighter-v2/assets/block-hit.mp3', // New block hit sound
+              invulnerable: '/Stickman-Fighter-v2/assets/block.mp3' // NEW: Reuse block sound for invulnerability
+          };
+          
+          let loadedCount = 0;
+          const totalSounds = Object.keys(soundFiles).length;
+          
+          // Create audio objects for each sound
+          for (const [name, url] of Object.entries(soundFiles)) {
+              sounds[name] = new Audio();
+              sounds[name].src = url;
+              
+              // Handle loading
+              sounds[name].addEventListener('canplaythrough', () => {
+                  loadedCount++;
+                  if (loadedCount === totalSounds) {
+                      soundsLoaded = true;
+                      console.log('All sounds loaded');
+                  }
+              });
+              
+              // Handle errors
+              sounds[name].addEventListener('error', (e) => {
+                  console.error(`Error loading sound ${name}:`, e);
+              });
+              
+              // Preload the sound
+              sounds[name].load();
+          }
+      }
+      
+      // Play a sound with error handling
+      function playSound(name) {
+          if (!soundEnabled || !soundsLoaded) return;
+          
+          try {
+              // Create a clone to allow overlapping sounds
+              const sound = sounds[name].cloneNode();
+              sound.volume = 0.5; // Set volume to 50%
+              
+              // Play the sound with a promise and catch any errors
+              const playPromise = sound.play();
+              
+              if (playPromise !== undefined) {
+                  playPromise.catch(error => {
+                      console.warn(`Sound play error (${name}):`, error);
+                  });
+              }
+          } catch (error) {
+              console.error(`Error playing sound ${name}:`, error);
+          }
+      }
+      
+      // Set up sound control button
+      function setupSoundControl() {
+          const soundControl = document.getElementById('soundControl');
+          
+          soundControl.addEventListener('click', function() {
+              soundEnabled = !soundEnabled;
+              this.textContent = soundEnabled ? '🔊' : '🔇';
+              
+              // Play a sound to confirm it's working
+              if (soundEnabled) {
+                  playSound('button');
+              }
+          });
+      }
+      
+      function resizeCanvas() {
+          // Get the gameArea dimensions
+          const gameArea = document.getElementById('gameArea');
+          gameWidth = gameArea.clientWidth;
+          gameHeight = gameArea.clientHeight;
+          
+          canvas.width = gameWidth;
+          canvas.height = gameHeight;
+      }
+      
+      function connectToServer() {
+          try {
+              // Connect to the hardcoded Glitch server
+              socket = io(GLITCH_SERVER_URL, {
+                  transports: ['websocket', 'polling'],
+                  reconnectionAttempts: 5
+              });
+              
+              socket.on('connect', function() {
+                  console.log('Connected to server');
+                  document.getElementById('waitingMessage').textContent = 'Waiting for another player to join...';
+              });
+              
+              socket.on('connect_error', function(error) {
+                  console.error('Connection error:', error);
+                  document.getElementById('waitingMessage').textContent = 'Connection error. Please try again.';
+                  // Try to reconnect after 3 seconds
+                  setTimeout(connectToServer, 3000);
+              });
+              
+              socket.on('playerId', function(id) {
+                  playerId = id;
+                  console.log('Your player ID:', playerId);
+                  
+                  // Show player indicator
+                  document.getElementById('playerIndicator').textContent = 
+                      id === 'player1' ? 'You are Player 1 (Red)' : 'You are Player 2 (Blue)';
+                  
+                  // Set up controls for this player
+                  setupPlayerControls();
+              });
+              
+              socket.on('gameState', function(state) {
+                  // Track previous player states to detect changes for sound effects
+                  const prevPlayer1State = players.player1 ? players.player1.state : null;
+                  const prevPlayer2State = players.player2 ? players.player2.state : null;
+                  const prevPlayer1Power = players.player1 ? players.player1.power : MAX_POWER;
+                  const prevPlayer2Power = players.player2 ? players.player2.power : MAX_POWER;
+                  const wasGameStarted = gameStarted;
+                  
+                  // Store the previous winner
+                  const prevWinner = gameState.winner;
+                  
+                  // Update game state
+                  players = state.players;
+                  gameStarted = state.gameStarted;
+                  gameState = state;
+                  
+                  // Add isMoving property if it doesn't exist
+                  if (players.player1 && players.player1.isMoving === undefined) {
+                      players.player1.isMoving = false;
+                  }
+                  if (players.player2 && players.player2.isMoving === undefined) {
+                      players.player2.isMoving = false;
+                  }
+                  
+                  // Add blocking property if it doesn't exist
+                  if (players.player1 && players.player1.blocking === undefined) {
+                      players.player1.blocking = false;
+                  }
+                  if (players.player2 && players.player2.blocking === undefined) {
+                      players.player2.blocking = false;
+                  }
+                  
+                  // NEW: Add invulnerability properties if they don't exist
+                  if (players.player1 && players.player1.isInvulnerable === undefined) {
+                      players.player1.isInvulnerable = false;
+                  }
+                  if (players.player2 && players.player2.isInvulnerable === undefined) {
+                      players.player2.isInvulnerable = false;
+                  }
+                  
+                  // Check if a player's health just reached zero
+                  const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
+                  const player2Defeated = prevPlayer2Power > 0 && players.player2.power <= 0;
 
-        // Update game display based on state
-        function updateGameDisplay() {
-            if (!gameState) return;
-            
-            // Update player positions
-            player1Element.style.left = gameState.players.player1.x + 'px';
-            player2Element.style.left = gameState.players.player2.x + 'px';
-            
-            // Update health bars
-            player1Health.style.width = gameState.players.player1.power + '%';
-            player2Health.style.width = gameState.players.player2.power + '%';
-            
-            // Update player states
-            updatePlayerState(player1Element, gameState.players.player1);
-            updatePlayerState(player2Element, gameState.players.player2);
-            
-            // Update game status
-            if (gameState.winner) {
-                gameStatus.textContent = gameState.winner === 'player1' ? 'Player 1 Wins!' : 'Player 2 Wins!';
-                restartContainer.style.display = 'block';
-                readyButton.disabled = false;
-                readyButton.textContent = 'Ready';
-            } else if (gameState.gameStarted) {
-                gameStatus.textContent = 'Fight!';
-            } else {
-                gameStatus.textContent = 'Waiting for players...';
-            }
-        }
+                  // If a player was just defeated, start the game ending sequence
+                  if ((player1Defeated || player2Defeated) && !gameEnding) {
+                      gameEnding = true;
+                      gameEndTime = performance.now();
+                      
+                      // Set victory/defeat animations immediately
+                      if (player1Defeated) {
+                          playerAnimations.player1.state = DEFEAT;
+                          playerAnimations.player2.state = VICTORY;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player2');
+                          winnerAnnounced = true;
+                      } else if (player2Defeated) {
+                          playerAnimations.player1.state = VICTORY;
+                          playerAnimations.player2.state = DEFEAT;
+                          
+                          // Immediately show winner message without delay
+                          showWinner('player1');
+                          winnerAnnounced = true;
+                      }
+                      
+                      // Play hurt sound for the defeated player
+                      if (player1Defeated) {
+                          playSound('hurt');
+                      } else if (player2Defeated) {
+                          playSound('hurt');
+                      }
+                      
+                      console.log("Game ending sequence started");
+                  }
+                  
+                  // Update animation states based on player states
+                  if (players.player1 && !gameEnding) {
+                      // Check if player is blocking
+                      if (players.player1.blocking) {
+                          playerAnimations.player1.state = BLOCKING;
+                          playerAnimations.player1.blockStart = performance.now();
+                          updateBlockIndicator('player1', true);
+                      } else {
+                          updateAnimationState('player1', players.player1.state, players.player1.isMoving);
+                          updateBlockIndicator('player1', false);
+                      }
+                      
+                      // NEW: Update invulnerability effect
+                      updateInvulnerabilityEffect('player1', players.player1.isInvulnerable);
+                  }
+                  
+                  if (players.player2 && !gameEnding) {
+                      // Check if player is blocking
+                      if (players.player2.blocking) {
+                          playerAnimations.player2.state = BLOCKING;
+                          playerAnimations.player2.blockStart = performance.now();
+                          updateBlockIndicator('player2', true);
+                      } else {
+                          updateAnimationState('player2', players.player2.state, players.player2.isMoving);
+                          updateBlockIndicator('player2', false);
+                      }
+                      
+                      // NEW: Update invulnerability effect
+                      updateInvulnerabilityEffect('player2', players.player2.isInvulnerable);
+                  }
+                  
+                  // Play game start sound when game begins
+                  if (gameStarted && !wasGameStarted) {
+                      playSound('gameStart');
+                  }
+                  
+                  // Play sounds based on state changes
+                  if (players.player1 && prevPlayer1State !== players.player1.state && !gameEnding) {
+                      if (players.player1.state === HITTING) playSound('hit');
+                      if (players.player1.state === KICKING) playSound('kick');
+                      if (players.player1.state === HURT) playSound('hurt');
+                      if (players.player1.blocking) playSound('block');
+                  }
+                  
+                  if (players.player2 && prevPlayer2State !== players.player2.state && !gameEnding) {
+                      if (players.player2.state === HITTING) playSound('hit');
+                      if (players.player2.state === KICKING) playSound('kick');
+                      if (players.player2.state === HURT) playSound('hurt');
+                      if (players.player2.blocking) playSound('block');
+                  }
+                  
+                  // Show/hide waiting message
+                  document.getElementById('waitingMessage').style.display = 
+                      gameStarted ? 'none' : 'block';
+                  
+                  // Check for winner
+                  if (state.winner && !prevWinner) {
+                      // Winner was just determined
+                      console.log(`Winner determined: ${state.winner}`);
+                      
+                      // Start the game ending sequence if it hasn't already started
+                      if (!gameEnding) {
+                          gameEnding = true;
+                          gameEndTime = performance.now();
+                          
+                          // Set victory/defeat animations immediately
+                          if (state.winner === 'player1') {
+                              playerAnimations.player1.state = VICTORY;
+                              playerAnimations.player2.state = DEFEAT;
+                          } else {
+                              playerAnimations.player1.state = DEFEAT;
+                              playerAnimations.player2.state = VICTORY;
+                          }
+                          
+                          // Play victory sound
+                          playSound('victory');
+                      }
+                  } else if (state.winner === null && prevWinner) {
+                      // Game has been reset
+                      resetGameState();
+                  }
+              });
+              
+              // Listen for player ready status updates
+              socket.on('playerReady', function(players) {
+                  readyPlayers = players;
+                  updateReadyStatus();
+                  
+                  debug("Ready players: " + JSON.stringify(readyPlayers));
+                  
+                  // If this player is ready, update button state
+                  if (readyPlayers.includes(playerId)) {
+                      const restartBtn = document.getElementById('restartBtn');
+                      restartBtn.textContent = 'Waiting for other player...';
+                      restartBtn.disabled = true;
+                  }
+                  
+                  // Play button sound when a player gets ready
+                  playSound('button');
+                  
+                  // Check if both players are ready
+                  if (readyPlayers.includes('player1') && readyPlayers.includes('player2')) {
+                      debug("Both players ready, restarting game");
+                      
+                      // Hide winner message
+                      document.getElementById('winnerMessage').style.display = 'none';
+                      
+                      // Reset game state locally
+                      resetGameState();
+                      
+                      // Tell the server to restart the game
+                      socket.emit('restartGame');
+                  }
+              });
 
-        // Update player state classes
-        function updatePlayerState(element, playerState) {
-            // Clear all state classes
-            element.classList.remove('hitting', 'kicking', 'hurt', 'blocking');
-            
-            // Add current state class
-            if (playerState.state === 'hitting') {
-                element.classList.add('hitting');
-            } else if (playerState.state === 'kicking') {
-                element.classList.add('kicking');
-            } else if (playerState.state === 'hurt') {
-                element.classList.add('hurt');
-            }
-            
-            // Add blocking class
-            if (playerState.blocking) {
-                element.classList.add('blocking');
-            }
-            
-            // Update cooldown indicator
-            const cooldownElement = element.id === 'player1' ? player1Cooldown : player2Cooldown;
-            const now = Date.now();
-            
-            if (now - playerState.lastAttackTime < ATTACK_COOLDOWN) {
-                const progress = 1 - ((now - playerState.lastAttackTime) / ATTACK_COOLDOWN);
-                cooldownElement.style.transform = `scaleX(${progress})`;
-            } else {
-                cooldownElement.style.transform = 'scaleX(0)';
-            }
-            
-            // Update status text
-            const statusElement = element.id === 'player1' ? player1Status : player2Status;
-            
-            if (playerState.blocking) {
-                statusElement.textContent = 'BLOCKING';
-                statusElement.style.color = '#aa4';
-            } else if (playerState.blockCooldown) {
-                statusElement.textContent = 'BLOCK CD';
-                statusElement.style.color = '#a84';
-            } else if (playerState.isInvulnerable) {
-                statusElement.textContent = 'INVULNERABLE';
-                statusElement.style.color = '#4af';
-            } else {
-                statusElement.textContent = '';
-            }
-        }
+              // Add a new socket event handler for game restart confirmation
+              socket.on('gameRestarted', function() {
+                  debug("Game has been restarted by server");
+                  
+                  // Hide winner message if it's still showing
+                  document.getElementById('winnerMessage').style.display = 'none';
+                  
+                  // Reset game state
+                  resetGameState();
+                  
+                  // Play game start sound
+                  playSound('gameStart');
+              });
+              
+              // NEW: Handle hit result event for invulnerability and combo tracking
+              socket.on('hitResult', function(data) {
+                  console.log('Hit result:', data);
+                  
+                  // Play appropriate sound
+                  if (data.blocked) {
+                      playSound('blockHit');
+                  } else if (data.invulnerable) {
+                      playSound('invulnerable');
+                  }
+                  
+                  // Update combo counter if provided
+                  if (data.comboCount && data.comboCount > 1) {
+                      showComboCounter(data.attackerId, data.comboCount);
+                  }
+                  
+                  // Update invulnerability status
+                  if (data.invulnerable) {
+                      // The target is now invulnerable
+                      if (players[data.targetId]) {
+                          players[data.targetId].isInvulnerable = true;
+                          updateInvulnerabilityEffect(data.targetId, true);
+                          
+                          // Set a timeout to remove invulnerability after duration
+                          setTimeout(() => {
+                              if (players[data.targetId]) {
+                                  players[data.targetId].isInvulnerable = false;
+                                  updateInvulnerabilityEffect(data.targetId, false);
+                              }
+                          }, INVULNERABILITY_DURATION);
+                      }
+                  }
+              });
+          } catch (error) {
+              console.error('Error connecting to server:', error);
+              document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
+              // Try to reconnect after 3 seconds
+              setTimeout(connectToServer, 3000);
+          }
+      }
+      
+      // NEW: Show combo counter
+      function showComboCounter(playerId, count) {
+          const comboElement = document.getElementById(`${playerId}-combo`);
+          if (!comboElement) return;
+          
+          // Get player position
+          const playerElement = calculatePlayerScreenPosition(playerId);
+          if (!playerElement) return;
+          
+          // Position combo counter above player
+          comboElement.style.left = (playerElement.x + PLAYER_WIDTH / 2) + 'px';
+          comboElement.style.top = (playerElement.y - 40) + 'px';
+          
+          // Show the combo count
+          comboElement.textContent = `${count}x COMBO!`;
+          comboElement.style.display = 'block';
+          
+          // Hide it after a short time
+          setTimeout(() => {
+              comboElement.style.display = 'none';
+          }, 1000);
+      }
+      
+      // NEW: Calculate player screen position
+      function calculatePlayerScreenPosition(playerId) {
+          if (!players[playerId]) return null;
+          
+          const player = players[playerId];
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          return { x: screenX, y: screenY };
+      }
+      
+      // NEW: Update invulnerability effect
+      function updateInvulnerabilityEffect(playerId, isInvulnerable) {
+          const effect = invulnerabilityEffects[playerId];
+          if (!effect) return;
+          
+          if (isInvulnerable) {
+              // Show effect
+              effect.style.display = 'block';
+              
+              // Position effect around player
+              const playerPos = calculatePlayerScreenPosition(playerId);
+              if (playerPos) {
+                  effect.style.left = (playerPos.x - 15) + 'px'; // Wider than player
+                  effect.style.top = (playerPos.y - 10) + 'px'; // Taller than player
+              }
+          } else {
+              // Hide effect
+              effect.style.display = 'none';
+          }
+      }
+      
+      // Update block indicator position and visibility
+      function updateBlockIndicator(playerId, isBlocking) {
+          const indicator = blockIndicators[playerId];
+          if (!indicator) return;
+          
+          if (isBlocking) {
+              // Show indicator
+              indicator.style.display = 'block';
+              
+              // Position indicator above player
+              if (players[playerId]) {
+                  const scaleFactor = Math.min(1, gameWidth / 800);
+                  const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, players[playerId].x * scaleFactor));
+                  const screenY = gameHeight - 50 - PLAYER_HEIGHT - 30; // Position above player
+                  
+                  indicator.style.left = (screenX + PLAYER_WIDTH / 2 - 20) + 'px'; // Center horizontally
+                  indicator.style.top = screenY + 'px';
+              }
+          } else {
+              // Hide indicator
+              indicator.style.display = 'none';
+          }
+      }
+      
+      // Update block cooldown display
+      function updateBlockCooldown(playerId, cooldownPercent) {
+          const cooldownElement = document.getElementById(`${playerId}BlockCooldown`);
+          if (cooldownElement) {
+              cooldownElement.style.transform = `scaleX(${cooldownPercent})`;
+          }
+      }
+      
+      // Reset game state when a new game starts
+      function resetGameState() {
+          console.log("Resetting game state");
+          
+          // Hide winner message
+          document.getElementById('winnerMessage').style.display = 'none';
+          
+          // Reset button state
+          const restartBtn = document.getElementById('restartBtn');
+          restartBtn.textContent = 'Play Again';
+          restartBtn.disabled = false;
+          
+          // Reset player status indicators
+          document.getElementById('player1Status').className = 'status-indicator status-waiting';
+          document.getElementById('player1Status').textContent = 'Player 1: Waiting';
+          document.getElementById('player2Status').className = 'status-indicator status-waiting';
+          document.getElementById('player2Status').textContent = 'Player 2: Waiting';
+          
+          // Clear ready players array
+          readyPlayers = [];
+          
+          // Reset animation states
+          playerAnimations.player1.state = IDLE;
+          playerAnimations.player2.state = IDLE;
+          
+          // Reset game ending flags
+          gameEnding = false;
+          gameEndTime = 0;
+          winnerAnnounced = false;
+          
+          // Reset hit feedback
+          hitFeedback.active = false;
+          
+          // Reset block cooldowns
+          blockCooldowns.player1 = 0;
+          blockCooldowns.player2 = 0;
+          
+          // Hide block indicators
+          updateBlockIndicator('player1', false);
+          updateBlockIndicator('player2', false);
+          
+          // NEW: Reset combo counters
+          comboCounts.player1 = 0;
+          comboCounts.player2 = 0;
+          
+          // NEW: Hide combo counters
+          document.getElementById('player1-combo').style.display = 'none';
+          document.getElementById('player2-combo').style.display = 'none';
+          
+          // NEW: Hide invulnerability effects
+          updateInvulnerabilityEffect('player1', false);
+          updateInvulnerabilityEffect('player2', false);
+      }
+      
+      // Update animation state based on player state
+      function updateAnimationState(playerId, state, isMoving) {
+          const anim = playerAnimations[playerId];
+          
+          // Don't update if we're in the game ending sequence
+          if (gameEnding) return;
+          
+          // Only update if state changed
+          if (anim.state !== state) {
+              anim.frame = 0; // Reset animation frame on state change
+              
+              // Reset specific animation variables
+              if (state === HURT) {
+                  anim.hurtAngle = 0;
+                  anim.hurtDirection = playerId === 'player1' ? 1 : -1;
+              }
+          }
+          
+          // Set the animation state
+          anim.state = state;
+          
+          // Handle walking state
+          if (isMoving && state === IDLE) {
+              anim.state = WALKING;
+          }
+      }
+      
+      function updateReadyStatus() {
+          // Update player 1 status
+          const player1Status = document.getElementById('player1Status');
+          if (readyPlayers.includes('player1')) {
+              player1Status.className = 'status-indicator status-ready';
+              player1Status.textContent = 'Player 1: Ready';
+          } else {
+              player1Status.className = 'status-indicator status-waiting';
+              player1Status.textContent = 'Player 1: Waiting';
+          }
+          
+          // Update player 2 status
+          const player2Status = document.getElementById('player2Status');
+          if (readyPlayers.includes('player2')) {
+              player2Status.className = 'status-indicator status-ready';
+              player2Status.textContent = 'Player 2: Ready';
+          } else {
+              player2Status.className = 'status-indicator status-waiting';
+              player2Status.textContent = 'Player 2: Waiting';
+          }
+      }
+      
+      function setupPlayerControls() {
+          const controlsContainer = document.getElementById('controlsContainer');
+          
+          // Clear any existing controls
+          controlsContainer.innerHTML = '';
+          
+          // Create new control container
+          const playerControls = document.createElement('div');
+          playerControls.className = 'player-controls';
+          playerControls.innerHTML = `
+              <button class="control-btn move-btn" id="moveLeft">←</button>
+              <button class="control-btn move-btn" id="moveRight">→</button>
+              <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+              <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+              <button class="control-btn block-btn" id="blockBtn">BLOCK</button>
+          `;
+          
+          controlsContainer.appendChild(playerControls);
+          
+          // Setup touch event listeners
+          setupControlEventListeners();
+      }
+      
+      function setupControlEventListeners() {
+          // Get all control buttons
+          const moveLeftBtn = document.getElementById('moveLeft');
+          const moveRightBtn = document.getElementById('moveRight');
+          const hitBtn = document.getElementById('hitBtn');
+          const kickBtn = document.getElementById('kickBtn');
+          const blockBtn = document.getElementById('blockBtn');
+          
+          // Clear any existing event listeners (just in case)
+          moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
+          moveRightBtn.replaceWith(moveRightBtn.cloneNode(true));
+          hitBtn.replaceWith(hitBtn.cloneNode(true));
+          kickBtn.replaceWith(kickBtn.cloneNode(true));
+          blockBtn.replaceWith(blockBtn.cloneNode(true));
+          
+          // Get the fresh elements
+          const newMoveLeftBtn = document.getElementById('moveLeft');
+          const newMoveRightBtn = document.getElementById('moveRight');
+          const newHitBtn = document.getElementById('hitBtn');
+          const newKickBtn = document.getElementById('kickBtn');
+          const newBlockBtn = document.getElementById('blockBtn');
+          
+          // Add touch start event listeners
+          newMoveLeftBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
+          });
+          
+          newMoveRightBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
+          });
+          
+          newHitBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+          });
+          
+          newKickBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+          });
+          
+          newBlockBtn.addEventListener('touchstart', function(e) {
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding && canBlock(playerId)) {
+                  socket.emit('block', {blocking: true});
+                  startBlockCooldown(playerId);
+              }
+          });
+          
+          // Add touch end event listeners
+          newMoveLeftBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newMoveRightBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newHitBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
+          
+          newKickBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
+          
+          newBlockBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('block', {blocking: false});
+          });
+          
+          // For mouse users (testing)
+          newMoveLeftBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
+          });
+          
+          newMoveRightBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
+          });
+          
+          newHitBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+          });
+          
+          newKickBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+          });
+          
+          newBlockBtn.addEventListener('mousedown', function(e) {
+              this.classList.add('active');
+              if (socket && !gameEnding && canBlock(playerId)) {
+                  socket.emit('block', {blocking: true});
+                  startBlockCooldown(playerId);
+              }
+          });
+          
+          newMoveLeftBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newMoveRightBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('stopMove');
+          });
+          
+          newHitBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+          });
+          
+          newKickBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+          });
+          
+          newBlockBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+              if (socket && !gameEnding) socket.emit('block', {blocking: false});
+          });
+          
+          // Stop movement when mouse is released
+          newMoveLeftBtn.addEventListener('mouseup', function(e) {
+              if (playerId === 'player1') {
+                  socket.emit('stopMove');
+              }
+          });
+          
+          newMoveRightBtn.addEventListener('mouseup', function(e) {
+              if (playerId === 'player1') {
+                  socket.emit('stopMove');
+              }
+          });
+          
+          newMoveLeftBtn.addEventListener('mouseup', function(e) {
+              if (playerId === 'player2') {
+                  socket.emit('stopMove');
+              }
+          });
+          
+          newMoveRightBtn.addEventListener('mouseup', function(e) {
+              if (playerId === 'player2') {
+                  socket.emit('stopMove');
+              }
+          });
+          
+          // Setup keyboard controls
+          setupKeyboardControls();
+      }
+      
+      // Check if player can block (not in cooldown)
+      function canBlock(playerId) {
+          return blockCooldowns[playerId] <= 0;
+      }
+      
+      // Start block cooldown for a player
+      function startBlockCooldown(playerId) {
+          blockCooldowns[playerId] = BLOCK_COOLDOWN;
+      }
+      
+      function setupKeyboardControls() {
+          // Remove any existing event listeners
+          window.removeEventListener('keydown', handleKeyDown);
+          
+          window.removeEventListener('keyup', handleKeyUp);
+          
+          // Add event listeners
+          window.addEventListener('keydown', handleKeyDown);
+          window.addEventListener('keyup', handleKeyUp);
+      }
+      
+      function handleKeyDown(e) {
+          if (!socket || !playerId || gameEnding) return;
+          
+          let buttonId = null;
+          let command = null;
+          
+          // Player 1 controls
+          if (playerId === 'player1') {
+              if (e.key === 'a') {
+                  buttonId = 'moveLeft';
+                  command = {type: 'move', data: {direction: 'left'}};
+              }
+              else if (e.key === 'd') {
+                  buttonId = 'moveRight';
+                  command = {type: 'move', data: {direction: 'right'}};
+              }
+              else if (e.key === 'q') {
+                  buttonId = 'hitBtn';
+                  command = {type: 'attack', data: {type: 'hit'}};
+              }
+              else if (e.key === 'e') {
+                  buttonId = 'kickBtn';
+                  command = {type: 'attack', data: {type: 'kick'}};
+              }
+              else if (e.key === 's') {
+                  buttonId = 'blockBtn';
+                  if (canBlock(playerId)) {
+                      command = {type: 'block', data: {blocking: true}};
+                      startBlockCooldown(playerId);
+                  }
+              }
+          }
+          // Player 2 controls
+          else if (playerId === 'player2') {
+              if (e.key === 'ArrowLeft') {
+                  buttonId = 'moveLeft';
+                  command = {type: 'move', data: {direction: 'left'}};
+              }
+              else if (e.key === 'ArrowRight') {
+                  buttonId = 'moveRight';
+                  command = {type: 'move', data: {direction: 'right'}};
+              }
+              else if (e.key === ',') {
+                  buttonId = 'hitBtn';
+                  command = {type: 'attack', data: {type: 'hit'}};
+              }
+              else if (e.key === '.') {
+                  buttonId = 'kickBtn';
+                  command = {type: 'attack', data: {type: 'kick'}};
+              }
+              else if (e.key === 'ArrowDown') {
+                  buttonId = 'blockBtn';
+                  if (canBlock(playerId)) {
+                      command = {type: 'block', data: {blocking: true}};
+                      startBlockCooldown(playerId);
+                  }
+              }
+          }
+          
+          // Add active class to the button
+          if (buttonId) {
+              const button = document.getElementById(buttonId);
+              if (button && !button.classList.contains('active')) {
+                  button.classList.add('active');
+              }
+              
+              // Send command to server
+              if (command) {
+                  if (command.type === 'move') {
+                      socket.emit('move', command.data);
+                  } else if (command.type === 'attack') {
+                      socket.emit('attack', command.data);
+                  } else if (command.type === 'block') {
+                      socket.emit('block', command.data);
+                  }
+              }
+          }
+      }
+      
+      function handleKeyUp(e) {
+          if (!socket || !playerId) return;
+          
+          let buttonId = null;
+          let shouldStopMove = false;
+          let shouldStopBlock = false;
+          
+          // Player 1 controls
+          if (playerId === 'player1') {
+              if (e.key === 'a') {
+                  buttonId = 'moveLeft';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'd') {
+                  buttonId = 'moveRight';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'q') {
+                  buttonId = 'hitBtn';
+              }
+              else if (e.key === 'e') {
+                  buttonId = 'kickBtn';
+              }
+              else if (e.key === 's') {
+                  buttonId = 'blockBtn';
+                  shouldStopBlock = true;
+              }
+          }
+          // Player 2 controls
+          else if (playerId === 'player2') {
+              if (e.key === 'ArrowLeft') {
+                  buttonId = 'moveLeft';
+                  shouldStopMove = true;
+              }
+              else if (e.key === 'ArrowRight') {
+                  buttonId = 'moveRight';
+                  shouldStopMove = true;
+              }
+              else if (e.key === ',') {
+                  buttonId = 'hitBtn';
+              }
+              else if (e.key === '.') {
+                  buttonId = 'kickBtn';
+              }
+              else if (e.key === 'ArrowDown') {
+                  buttonId = 'blockBtn';
+                  shouldStopBlock = true;
+              }
+          }
+          
+          // Remove active class from the button
+          if (buttonId) {
+              const button = document.getElementById(buttonId);
+              if (button) {
+                  button.classList.remove('active');
+              }
+              
+              // Stop movement if needed
+              if (shouldStopMove && !gameEnding) {
+                  socket.emit('stopMove');
+              }
+              
+              // Stop blocking if needed
+              if (shouldStopBlock && !gameEnding) {
+                  socket.emit('block', {blocking: false});
+              }
+          }
+      }
+      
+      function setupRestartButton() {
+          const restartBtn = document.getElementById('restartBtn');
+          
+          // Add event handler for restart button
+          restartBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+              
+              if (socket && playerId) {
+                  // Play button sound
+                  playSound('button');
+                  
+                  // Send player ready status to server
+                  socket.emit('playerReady', playerId);
+                  
+                  // Update button state
+                  this.textContent = 'Waiting for other player...';
+                  this.disabled = true;
+                  
+                  debug("Sent playerReady: " + playerId);
+              }
+          });
+      }
+      
+      function gameLoop(timestamp) {
+          // Calculate delta time for smooth animations
+          const deltaTime = timestamp - lastTime;
+          lastTime = timestamp;
+          
+          // Update animation frame
+          animationFrame += ANIMATION_SPEED * (deltaTime / 16.67); // Normalize to ~60fps
+          
+          // Update player animations
+          updatePlayerAnimations(deltaTime);
+          
+          // Update block cooldowns
+          updateBlockCooldowns(deltaTime);
 
-        // Check if players are close enough for a hit
-        function checkHitRange(attackerId, targetId, attackType) {
-            if (!gameState) return false;
-            
-            const attacker = gameState.players[attackerId];
-            const target = gameState.players[targetId];
-            
-            const range = attackType === 'hit' ? HIT_RANGE : KICK_RANGE;
-            const distance = Math.abs(attacker.x - target.x);
-            
-            return distance <= range;
-        }
+          // Update hit detection (only if game is active and not ending)
+          if (gameStarted && !gameEnding) {
+              checkHits();
+          }
+          
+          // Clear canvas
+          ctx.clearRect(0, 0, gameWidth, gameHeight);
+          
+          // Draw game elements
+          drawBackground();
 
-        // Register a hit
-        function registerHit(attackerId, targetId, attackType) {
-            if (!checkHitRange(attackerId, targetId, attackType)) return;
-            
-            const damage = attackType === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
-            
-            // Check for critical hit (back attack)
-            let criticalHit = false;
-            const attacker = gameState.players[attackerId];
-            const target = gameState.players[targetId];
-            
-            if ((attackerId === 'player1' && attacker.x < target.x) || 
-                (attackerId === 'player2' && attacker.x > target.x)) {
-                criticalHit = true;
-            }
-            
-            const finalDamage = criticalHit ? Math.floor(damage * CRITICAL_HIT_MULTIPLIER) : damage;
-            
-            // Send hit registration to server
-            socket.emit('registerHit', {
-                attackerId: attackerId,
-                targetId: targetId,
-                damage: finalDamage,
-                hitZone: attackType
-            });
-        }
+          // Always draw players, even if game is not started
+          if (players.player1 && players.player2) {
+              drawPlayers();
+          }
 
-        // Handle keyboard input
-        document.addEventListener('keydown', (e) => {
-            if (!playerId || playerId === 'observer') return;
-            
-            keysPressed[e.key] = true;
-            
-            // Player 1 controls
-            if (playerId === 'player1') {
-                if (e.key === 'a' || e.key === 'A') {
-                    socket.emit('move', { direction: 'left' });
-                } else if (e.key === 'd' || e.key === 'D') {
-                    socket.emit('move', { direction: 'right' });
-                } else if (e.key === 'w' || e.key === 'W') {
-                    const now = Date.now();
-                    if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                        socket.emit('attack', { type: 'hit' });
-                        lastAttackTime = now;
-                        
-                        // Register hit after a short delay to match animation
-                        setTimeout(() => {
-                            registerHit('player1', 'player2', 'hit');
-                        }, 100);
-                    }
-                } else if (e.key === 's' || e.key === 'S') {
-                    const now = Date.now();
-                    if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                        socket.emit('attack', { type: 'kick' });
-                        lastAttackTime = now;
-                        
-                        // Register hit after a short delay to match animation
-                        setTimeout(() => {
-                            registerHit('player1', 'player2', 'kick');
-                        }, 100);
-                    }
-                } else if (e.key === 'q' || e.key === 'Q') {
-                    const now = Date.now();
-                    if (!blockCooldown && now - lastBlockTime >= BLOCK_COOLDOWN) {
-                        socket.emit('block', { blocking: true });
-                    }
-                }
-            }
-            
-            // Player 2 controls
-            if (playerId === 'player2') {
-                if (e.key === 'ArrowLeft') {
-                    socket.emit('move', { direction: 'left' });
-                } else if (e.key === 'ArrowRight') {
-                    socket.emit('move', { direction: 'right' });
-                } else if (e.key === 'ArrowUp') {
-                    const now = Date.now();
-                    if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                        socket.emit('attack', { type: 'hit' });
-                        lastAttackTime = now;
-                        
-                        // Register hit after a short delay to match animation
-                        setTimeout(() => {
-                            registerHit('player2', 'player1', 'hit');
-                        }, 100);
-                    }
-                } else if (e.key === 'ArrowDown') {
-                    const now = Date.now();
-                    if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                        socket.emit('attack', { type: 'kick' });
-                        lastAttackTime = now;
-                        
-                        // Register hit after a short delay to match animation
-                        setTimeout(() => {
-                            registerHit('player2', 'player1', 'kick');
-                        }, 100);
-                    }
-                } else if (e.key === 'Enter') {
-                    const now = Date.now();
-                    if (!blockCooldown && now - lastBlockTime >= BLOCK_COOLDOWN) {
-                        socket.emit('block', { blocking: true });
-                    }
-                }
-            }
-        });
+          // Draw hit feedback and power bars if game is active or ending
+          if (gameStarted || gameEnding) {
+              drawHitFeedback();
+              drawPowerBars();
+              // drawHitboxes(); // Uncomment for debugging
+          }
+          
+          // Continue the game loop
+          requestAnimationFrame(gameLoop);
+      }
+      
+      // Update block cooldowns
+      function updateBlockCooldowns(deltaTime) {
+          // Update player 1 cooldown
+          if (blockCooldowns.player1 > 0) {
+              blockCooldowns.player1 -= deltaTime;
+              if (blockCooldowns.player1 < 0) blockCooldowns.player1 = 0;
+              
+              // Update cooldown display
+              updateBlockCooldown('player1', 1 - (blockCooldowns.player1 / BLOCK_COOLDOWN));
+          }
+          
+          // Update player 2 cooldown
+          if (blockCooldowns.player2 > 0) {
+              blockCooldowns.player2 -= deltaTime;
+              if (blockCooldowns.player2 < 0) blockCooldowns.player2 = 0;
+              
+              // Update cooldown display
+              updateBlockCooldown('player2', 1 - (blockCooldowns.player2 / BLOCK_COOLDOWN));
+          }
+          
+          // Check if block duration has expired
+          const now = performance.now();
+          
+          // Player 1 block duration check
+          if (playerAnimations.player1.state === BLOCKING && 
+              now - playerAnimations.player1.blockStart > BLOCK_DURATION) {
+              // Auto-release block after duration
+              if (socket && playerId === 'player1') {
+                  socket.emit('block', {blocking: false});
+              }
+          }
+          
+          // Player 2 block duration check
+          if (playerAnimations.player2.state === BLOCKING && 
+              now - playerAnimations.player2.blockStart > BLOCK_DURATION) {
+              // Auto-release block after duration
+              if (socket && playerId === 'player2') {
+                  socket.emit('block', {blocking: false});
+              }
+          }
+      }
+      
+      // Update player animations
+      function updatePlayerAnimations(deltaTime) {
+          // Update player 1 animations
+          updatePlayerAnimation('player1', deltaTime);
+          
+          // Update player 2 animations
+          updatePlayerAnimation('player2', deltaTime);
+      }
+      
+      // Update individual player animation
+      function updatePlayerAnimation(playerId, deltaTime) {
+          const anim = playerAnimations[playerId];
+          
+          // Update breathing animation for idle
+          if (anim.state === IDLE) {
+              anim.breatheOffset += anim.breatheDirection * 0.02 * (deltaTime / 16.67);
+              
+              // Reverse direction at limits
+              if (anim.breatheOffset > 1) {
+                  anim.breatheOffset = 1;
+                  anim.breatheDirection = -1;
+              } else if (anim.breatheOffset < -1) {
+                  anim.breatheOffset = -1;
+                  anim.breatheDirection = 1;
+              }
+          }
+          
+          // Update walking animation
+          if (anim.state === WALKING) {
+              anim.walkCycle += 0.1 * (deltaTime / 16.67);
+              if (anim.walkCycle > Math.PI * 2) {
+                  anim.walkCycle -= Math.PI * 2;
+              }
+          }
+          
+          // Update hurt animation
+          if (anim.state === HURT) {
+              anim.hurtAngle += anim.hurtDirection * 0.2 * (deltaTime / 16.67);
+              
+              // Limit the hurt angle
+              if (Math.abs(anim.hurtAngle) > Math.PI / 6) {
+                  anim.hurtDirection *= -0.7; // Bounce back with damping
+              }
+          }
+          
+          // Update victory animation
+          if (anim.state === VICTORY) {
+              anim.victoryJump += 0.1 * (deltaTime / 16.67);
+              if (anim.victoryJump > Math.PI * 2) {
+                  anim.victoryJump -= Math.PI * 2;
+              }
+          }
+          
+          // Update defeat animation
+          if (anim.state === DEFEAT) {
+              if (anim.defeatFall < 1) {
+                  anim.defeatFall += 0.02 * (deltaTime / 16.67);
+                  if (anim.defeatFall > 1) anim.defeatFall = 1;
+              }
+          }
+      }
 
-        document.addEventListener('keyup', (e) => {
-            if (!playerId || playerId === 'observer') return;
-            
-            keysPressed[e.key] = false;
-            
-            // Player 1 controls
-            if (playerId === 'player1') {
-                if ((e.key === 'a' || e.key === 'A') && !keysPressed['d'] && !keysPressed['D']) {
-                    socket.emit('stopMove');
-                } else if ((e.key === 'd' || e.key === 'D') && !keysPressed['a'] && !keysPressed['A']) {
-                    socket.emit('stopMove');
-                } else if (e.key === 'q' || e.key === 'Q') {
-                    socket.emit('block', { blocking: false });
-                    lastBlockTime = Date.now();
-                    blockCooldown = true;
-                    
-                    // Reset block cooldown
-                    setTimeout(() => {
-                        blockCooldown = false;
-                    }, BLOCK_COOLDOWN);
-                }
-            }
-            
-            // Player 2 controls
-            if (playerId === 'player2') {
-                if (e.key === 'ArrowLeft' && !keysPressed['ArrowRight']) {
-                    socket.emit('stopMove');
-                } else if (e.key === 'ArrowRight' && !keysPressed['ArrowLeft']) {
-                    socket.emit('stopMove');
-                } else if (e.key === 'Enter') {
-                    socket.emit('block', { blocking: false });
-                    lastBlockTime = Date.now();
-                    blockCooldown = true;
-                    
-                    // Reset block cooldown
-                    setTimeout(() => {
-                        blockCooldown = false;
-                    }, BLOCK_COOLDOWN);
-                }
-            }
-        });
+      // Calculate hitboxes for a player
+      function calculateHitboxes(playerId) {
+          if (!players[playerId]) return null;
+          
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          const facingLeft = playerId === 'player2'; // Player 2 faces left
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          // Calculate center point
+          const centerX = screenX + PLAYER_WIDTH / 2;
+          const headY = screenY + 10 + anim.breatheOffset + yOffset;
+          
+          // Calculate attack point (where hits land)
+          let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
+          let attackY = screenY + 25 + yOffset;
+          let attackRange = 10; // Default attack range
 
-        // Button controls
-        document.getElementById('p1-left').addEventListener('mousedown', () => {
-            if (playerId === 'player1') {
-                socket.emit('move', { direction: 'left' });
-            }
-        });
-        
-        document.getElementById('p1-right').addEventListener('mousedown', () => {
-            if (playerId === 'player1') {
-                socket.emit('move', { direction: 'right' });
-            }
-        });
-        
-        document.getElementById('p1-hit').addEventListener('click', () => {
-            if (playerId === 'player1') {
-                const now = Date.now();
-                if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                    socket.emit('attack', { type: 'hit' });
-                    lastAttackTime = now;
-                    
-                    setTimeout(() => {
-                        registerHit('player1', 'player2', 'hit');
-                    }, 100);
-                }
-            }
-        });
-        
-        document.getElementById('p1-kick').addEventListener('click', () => {
-            if (playerId === 'player1') {
-                const now = Date.now();
-                if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                    socket.emit('attack', { type: 'kick' });
-                    lastAttackTime = now;
-                    
-                    setTimeout(() => {
-                        registerHit('player1', 'player2', 'kick');
-                    }, 100);
-                }
-            }
-        });
-        
-        document.getElementById('p1-block').addEventListener('mousedown', () => {
-            if (playerId === 'player1') {
-                const now = Date.now();
-                if (!blockCooldown && now - lastBlockTime >= BLOCK_COOLDOWN) {
-                    socket.emit('block', { blocking: true });
-                }
-            }
-        });
-        
-        document.getElementById('p1-block').addEventListener('mouseup', () => {
-            if (playerId === 'player1') {
-                socket.emit('block', { blocking: false });
-                lastBlockTime = Date.now();
-                blockCooldown = true;
-                
-                setTimeout(() => {
-                    blockCooldown = false;
-                }, BLOCK_COOLDOWN);
-            }
-        });
-        
-        document.getElementById('p2-left').addEventListener('mousedown', () => {
-            if (playerId === 'player2') {
-                socket.emit('move', { direction: 'left' });
-            }
-        });
-        
-        document.getElementById('p2-right').addEventListener('mousedown', () => {
-            if (playerId === 'player2') {
-                socket.emit('move', { direction: 'right' });
-            }
-        });
-        
-        document.getElementById('p2-hit').addEventListener('click', () => {
-            if (playerId === 'player2') {
-                const now = Date.now();
-                if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                    socket.emit('attack', { type: 'hit' });
-                    lastAttackTime = now;
-                    
-                    setTimeout(() => {
-                        registerHit('player2', 'player1', 'hit');
-                    }, 100);
-                }
-            }
-        });
-        
-        document.getElementById('p2-kick').addEventListener('click', () => {
-            if (playerId === 'player2') {
-                const now = Date.now();
-                if (now - lastAttackTime >= ATTACK_COOLDOWN) {
-                    socket.emit('attack', { type: 'kick' });
-                    lastAttackTime = now;
-                    
-                    setTimeout(() => {
-                        registerHit('player2', 'player1', 'kick');
-                    }, 100);
-                }
-            }
-        });
-        
-        document.getElementById('p2-block').addEventListener('mousedown', () => {
-            if (playerId === 'player2') {
-                const now = Date.now();
-                if (!blockCooldown && now - lastBlockTime >= BLOCK_COOLDOWN) {
-                    socket.emit('block', { blocking: true });
-                }
-            }
-        });
-        
-        document.getElementById('p2-block').addEventListener('mouseup', () => {
-            if (playerId === 'player2') {
-                socket.emit('block', { blocking: false });
-                lastBlockTime = Date.now();
-                blockCooldown = true;
-                
-                setTimeout(() => {
-                    blockCooldown = false;
-                }, BLOCK_COOLDOWN);
-            }
-        });
-        
-        // Stop movement when mouse is released
-        document.getElementById('p1-left').addEventListener('mouseup', () => {
-            if (playerId === 'player1') {
-                socket.emit('stopMove');
-            }
-        });
-        
-        document.getElementById('p1-right').addEventListener('mouseup', () => {
-            if (playerId === 'player1') {
-                socket.emit('stopMove');
-            }
-        });
-        
-        document.getElementById('p2-left').addEventListener('mouseup', () => {
-            if (playerId === 'player2') {
-                socket.emit('stopMove');
-            }
-        });
-        
-        document.getElementById('p2-right').addEventListener('mouseup', () => {
-            if (playerId === 'player2') {
-                socket.emit('stopMove');
-            }
-        });
-        
-        // Ready button
-        readyButton.addEventListener('click', () => {
-            if (playerId) {
-                socket.emit('playerReady', playerId);
-                readyButton.disabled = true;
-                readyButton.textContent = 'Waiting for opponent...';
-            }
-        });
-    </script>
+          if (anim.state === HITTING) {
+              attackRange = 10;
+          } else if (anim.state === KICKING) {
+              // Extend kick range and adjust position
+              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH - 10 : LEG_HITBOX_WIDTH + 10);
+              attackY = screenY + 60 + yOffset;
+              attackRange = 15; // Larger range for kicks
+          }
+          
+          return {
+              id: playerId,
+              head: {
+                  x: centerX,
+                  y: headY,
+                  radius: HEAD_HITBOX_RADIUS
+              },
+              body: {
+                  x: centerX,
+                  y: screenY + 35 + yOffset,
+                  width: BODY_HITBOX_WIDTH,
+                  height: BODY_HITBOX_HEIGHT
+              },
+              attackPoint: {
+                  x: attackX,
+                  y: attackY,
+                  active: anim.state === HITTING || anim.state === KICKING,
+                  type: anim.state === HITTING ? 'hit' : 'kick',
+                  range: attackRange
+              },
+              blocking: anim.state === BLOCKING,
+              // NEW: Add invulnerability status to hitbox
+              invulnerable: player.isInvulnerable || false
+          };
+      }
+
+      // Check for hits between players
+      function checkHits() {
+          if (!gameStarted || !players.player1 || !players.player2 || gameEnding) return;
+          
+          // Don't check hits too frequently
+          const now = performance.now();
+          if (now - lastHitTime < HIT_COOLDOWN) return;
+          
+          // Calculate hitboxes
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          // Check player 1 attacking player 2
+          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT) {
+              const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
+              if (hit) {
+                  // NEW: Check if target is invulnerable
+                  if (!p2Hitbox.invulnerable) {
+                      applyHit('player1', 'player2', p1Hitbox.attackPoint, hit, p2Hitbox.blocking);
+                  } else {
+                      // Play invulnerable sound
+                      playSound('invulnerable');
+                      
+                      // Show invulnerable feedback
+                      hitFeedback = {
+                          active: true,
+                          x: hit.point.x,
+                          y: hit.point.y,
+                          type: 'invulnerable',
+                          time: performance.now()
+                      };
+                  }
+              }
+          }
+          
+          // Check player 2 attacking player 1
+          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT) {
+              const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
+              if (hit) {
+                  // NEW: Check if target is invulnerable
+                  if (!p1Hitbox.invulnerable) {
+                      applyHit('player2', 'player1', p2Hitbox.attackPoint, hit, p1Hitbox.blocking);
+                  } else {
+                      // Play invulnerable sound
+                      playSound('invulnerable');
+                      
+                      // Show invulnerable feedback
+                      hitFeedback = {
+                          active: true,
+                          x: hit.point.x,
+                          y: hit.point.y,
+                          type: 'invulnerable',
+                          time: performance.now()
+                      };
+                  }
+              }
+          }
+      }
+
+      // Detect if an attack point hits a hitbox
+      function detectHit(attackPoint, targetHitbox) {
+          // Get attack range (or default to 10)
+          const range = attackPoint.range || 10;
+          
+          // Check head hit (circular collision)
+          const dx = attackPoint.x - targetHitbox.head.x;
+          const dy = attackPoint.y - targetHitbox.head.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance < targetHitbox.head.radius + range) {
+              return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
+          }
+          
+          // Check body hit (rectangular collision with expanded range)
+          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2 - range;
+          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2 + range;
+          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2 - range;
+          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2 + range;
+          
+          if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
+              attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
+              return { zone: 'body', point: { x: attackPoint.x, y: attackPoint.y } };
+          }
+          
+          return null;
+      }
+
+      // Apply hit effects
+      function applyHit(attackerId, targetId, attackPoint, hit, isBlocking) {
+          // Don't register hits if the game is over
+          if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
+          
+          lastHitTime = performance.now();
+          
+          // Calculate damage based on attack type and hit zone
+          let damage = attackPoint.type === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
+          
+          // Critical hit for headshots
+          if (hit.zone === 'head') {
+              damage *= CRITICAL_HIT_MULTIPLIER;
+          }
+          
+          // Reduce damage if blocking
+          if (isBlocking) {
+              damage *= (1 - BLOCK_DAMAGE_REDUCTION);
+              
+              // Play block hit sound
+              playSound('blockHit');
+          }
+          
+          // NEW: Update combo counter
+          const now = performance.now();
+          const timeSinceLastHit = now - lastHitTimes[targetId];
+          
+          // Reset combo if it's been a while since the last hit
+          if (timeSinceLastHit > COMBO_RESET_TIME) {
+              comboCounts[attackerId] = 0;
+          }
+          
+          // Increment combo counter
+          comboCounts[attackerId]++;
+          
+          // Update last hit time
+          lastHitTimes[targetId] = now;
+          
+          // Send attack to server
+          if (socket) {
+              socket.emit('registerHit', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  damage: damage,
+                  hitZone: hit.zone,
+                  blocked: isBlocking,
+                  comboCount: comboCounts[attackerId] // NEW: Send combo count
+              });
+          }
+          
+          // Show hit feedback
+          hitFeedback = {
+              active: true,
+              x: hit.point.x,
+              y: hit.point.y,
+              type: isBlocking ? 'blocked' : (hit.zone === 'head' ? 'critical' : 'normal'),
+              time: performance.now()
+          };
+      }
+
+      // Draw hit feedback
+      function drawHitFeedback() {
+          if (!hitFeedback.active) return;
+          
+          const now = performance.now();
+          const elapsed = now - hitFeedback.time;
+          
+          if (elapsed > HIT_FEEDBACK_DURATION) {
+              hitFeedback.active = false;
+              return;
+          }
+          
+          // Calculate animation progress (0 to 1)
+          const progress = elapsed / HIT_FEEDBACK_DURATION;
+          const size = 20 + progress * 30;
+          const opacity = 1 - progress;
+          
+          ctx.save();
+          
+          // Draw hit effect
+          if (hitFeedback.type === 'critical') {
+              // Critical hit effect (red burst)
+              ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+          } else if (hitFeedback.type === 'blocked') {
+              // Blocked hit effect (yellow/gold burst)
+              ctx.fillStyle = `rgba(255, 200, 50, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+          } else if (hitFeedback.type === 'invulnerable') {
+              // NEW: Invulnerable hit effect (blue burst)
+              ctx.fillStyle = `rgba(74, 144, 226, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+          } else {
+              // Normal hit effect (white burst)
+              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+              ctx.strokeStyle = `rgba(200, 200, 200, ${opacity})`;
+          }
+          
+          // Draw burst
+          ctx.beginPath();
+          ctx.arc(hitFeedback.x, hitFeedback.y, size / 2, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Draw impact lines
+          ctx.lineWidth = 3;
+          for (let i = 0; i < 8; i++) {
+              const angle = Math.PI * 2 * i / 8;
+              const innerRadius = size / 2;
+              const outerRadius = size;
+              
+              ctx.beginPath();
+              ctx.moveTo(
+                  hitFeedback.x + Math.cos(angle) * innerRadius,
+                  hitFeedback.y + Math.sin(angle) * innerRadius
+              );
+              ctx.lineTo(
+                  hitFeedback.x + Math.cos(angle) * outerRadius,
+                  hitFeedback.y + Math.sin(angle) * outerRadius
+              );
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw power bars
+      function drawPowerBars() {
+          if (!players.player1 || !players.player2) return;
+          
+          const barWidth = Math.min(300, gameWidth * 0.4);
+          const barHeight = 20;
+          const margin = 10;
+          
+          ctx.save();
+          
+          // Player 1 power bar (left side)
+          const p1Power = players.player1.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(margin, margin, barWidth, barHeight);
+          
+          // Bar fill
+          ctx.fillStyle = p1Power > 0.3 ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 50, 50, 0.4)';
+          ctx.fillRect(margin, margin, barWidth * p1Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(margin, margin, barWidth, barHeight);
+          
+          // Player 2 power bar (right side)
+          const p2Power = players.player2.power / MAX_POWER;
+          
+          // Bar background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          // Bar fill (right-aligned)
+          ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
+          ctx.fillRect(gameWidth - margin - barWidth * p2Power, margin, barWidth * p2Power, barHeight);
+          
+          // Bar border
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          ctx.restore();
+      }
+
+      // Draw players
+      function drawPlayers() {
+          if (!players.player1 || !players.player2) return;
+          
+          // Calculate scale factor based on screen width
+          const scaleFactor = Math.min(1, gameWidth / 800);
+          const floorY = gameHeight - 50;
+          
+          // Draw player 1 (red)
+          drawPlayer('player1', scaleFactor, floorY);
+          
+          // Draw player 2 (blue)
+          drawPlayer('player2', scaleFactor, floorY);
+      }
+
+      // Draw a single player
+      function drawPlayer(playerId, scaleFactor, floorY) {
+          const player = players[playerId];
+          const anim = playerAnimations[playerId];
+          
+          // Adjust player positions for smaller screens
+          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+          const screenY = floorY - PLAYER_HEIGHT;
+          
+          // Set player color
+          const playerColor = playerId === 'player1' ? '#ff5555' : '#5555ff';
+          const outlineColor = playerId === 'player1' ? '#aa0000' : '#0000aa';
+          
+          // Apply animation offsets
+          let yOffset = 0;
+          if (anim.state === IDLE) {
+              yOffset = anim.breatheOffset;
+          } else if (anim.state === WALKING) {
+              yOffset = Math.sin(anim.walkCycle) * 3;
+          } else if (anim.state === VICTORY) {
+              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+          } else if (anim.state === DEFEAT) {
+              yOffset = anim.defeatFall * 20;
+          }
+          
+          ctx.save();
+          
+          // Apply hurt animation rotation
+          if (anim.state === HURT) {
+              const centerX = screenX + PLAYER_WIDTH / 2;
+              const centerY = screenY + PLAYER_HEIGHT / 2;
+              
+              ctx.translate(centerX, centerY);
+              ctx.rotate(anim.hurtAngle);
+              ctx.translate(-centerX, -centerY);
+          }
+          
+          // NEW: Apply invulnerability effect
+          if (player.isInvulnerable) {
+              ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 100) * 0.3; // Pulsing effect
+          }
+          
+          // Draw stick figure
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = outlineColor;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + 15 + yOffset, 10, 0, Math.PI * 2);
+          ctx.fillStyle = playerColor;
+          ctx.fill();
+          ctx.stroke();
+          
+          // Body
+          ctx.beginPath();
+          ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 25 + yOffset);
+          ctx.lineTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+          ctx.stroke();
+          
+          // Draw arms based on animation state
+          if (anim.state === HITTING) {
+              // Hitting animation - extend one arm
+              const punchExtension = 10;
+              const facingLeft = playerId === 'player2';
+              
+              // Back arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Punching arm
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 - punchExtension : 25 + punchExtension),
+                  screenY + 30 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === KICKING) {
+              // Kicking animation - extend one leg
+              const kickExtension = 15;
+              const facingLeft = playerId === 'player2';
+              
+              // Arms in ready position
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Standing leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 5 : -5),
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              // Kicking leg
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 - kickExtension : 30 + kickExtension),
+                  screenY + 60 + yOffset
+              );
+              ctx.stroke();
+          } else if (anim.state === BLOCKING) {
+              // Blocking animation - arms crossed in front
+              const facingLeft = playerId === 'player2';
+              
+              // Arms crossed in X shape
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 25 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Draw block shield effect
+              ctx.beginPath();
+              ctx.arc(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
+                  screenY + 35 + yOffset,
+                  15,
+                  0,
+                  Math.PI * 2
+              );
+              ctx.fillStyle = `rgba(255, 200, 50, 0.3)`;
+              ctx.fill();
+              ctx.strokeStyle = `rgba(255, 200, 50, 0.7)`;
+              ctx.stroke();
+              
+              // Legs in stable stance
+              ctx.strokeStyle = outlineColor;
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === VICTORY) {
+              // Victory animation - arms up
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === DEFEAT) {
+              // Defeat animation - slumped over
+              
+              // Arms hanging down
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              // Legs crumpled
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 75 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 75 + yOffset);
+              ctx.stroke();
+          } else if (anim.state === WALKING) {
+              // Walking animation
+              const walkOffset = Math.sin(anim.walkCycle);
+              const facingLeft = playerId === 'player2';
+              
+              // Arms swinging
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15) + walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15) - walkOffset * 5,
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Legs walking
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 - walkOffset * 10,
+                  screenY + 80 + yOffset
+              );
+              ctx.stroke();
+          } else {
+              // Default idle pose
+              
+              // Arms
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              // Legs
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          }
+          
+          ctx.restore();
+      }
+
+      // Draw background
+      function drawBackground() {
+          // Simple gradient background
+          const gradient = ctx.createLinearGradient(0, 0, 0, gameHeight);
+          gradient.addColorStop(0, '#4a6a8a');
+          gradient.addColorStop(1, '#2a3a4a');
+          
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, gameWidth, gameHeight);
+          
+          // Draw floor
+          ctx.fillStyle = '#554433';
+          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
+      }
+
+      // Show winner message
+      function showWinner(winnerId) {
+          const winnerMessage = document.getElementById('winnerMessage');
+          const winnerText = document.getElementById('winnerText');
+          
+          // Set winner text
+          winnerText.textContent = `${winnerId === 'player1' ? 'Player 1' : 'Player 2'} Wins!`;
+          
+          // Show the message
+          winnerMessage.style.display = 'block';
+          
+          // Reset ready status
+          updateReadyStatus();
+          
+          // Play victory sound
+          playSound('victory');
+      }
+
+      // Draw hitboxes for debugging
+      function drawHitboxes() {
+          if (!players.player1 || !players.player2) return;
+          
+          const p1Hitbox = calculateHitboxes('player1');
+          const p2Hitbox = calculateHitboxes('player2');
+          
+          if (!p1Hitbox || !p2Hitbox) return;
+          
+          ctx.save();
+          
+          // Draw player 1 hitboxes
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = 2;
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p1Hitbox.body.x - p1Hitbox.body.width / 2,
+              p1Hitbox.body.y - p1Hitbox.body.height / 2,
+              p1Hitbox.body.width,
+              p1Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p1Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // Draw block area if blocking
+          if (p1Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.body.x + 15, p1Hitbox.body.y, 20, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // NEW: Draw invulnerability indicator
+          if (p1Hitbox.invulnerable) {
+              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.rect(
+                  p1Hitbox.body.x - 25,
+                  p1Hitbox.head.y - 20,
+                  50,
+                  p1Hitbox.body.y + p1Hitbox.body.height / 2 - p1Hitbox.head.y + 30
+              );
+              ctx.stroke();
+              ctx.setLineDash([]);
+          }
+          
+          // Draw player 2 hitboxes
+          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
+          
+          // Head
+          ctx.beginPath();
+          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
+          
+          // Body
+          ctx.strokeRect(
+              p2Hitbox.body.x - p2Hitbox.body.width / 2,
+              p2Hitbox.body.y - p2Hitbox.body.height / 2,
+              p2Hitbox.body.width,
+              p2Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p2Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // Draw block area if blocking
+          if (p2Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.body.x - 15, p2Hitbox.body.y, 20, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // NEW: Draw invulnerability indicator
+          if (p2Hitbox.invulnerable) {
+              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.rect(
+                  p2Hitbox.body.x - 25,
+                  p2Hitbox.head.y - 20,
+                  50,
+                  p2Hitbox.body.y + p2Hitbox.body.height / 2 - p2Hitbox.head.y + 30
+              );
+              ctx.stroke();
+              ctx.setLineDash([]);
+          }
+          
+          ctx.restore();
+      }
+  </script>
 </body>
 </html>
