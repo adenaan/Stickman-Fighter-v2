@@ -1809,862 +1809,630 @@
           }
       }
 
-      // Track button presses for combo detection
-      function trackButtonPress(playerId, buttonType) {
-          // Don't track if on cooldown
-          if (specialMoveCooldowns[playerId] > 0) return;
-          
-          // Update the sequence
-          buttonCombos[playerId].sequence.push(buttonType);
-          buttonCombos[playerId].lastPressTime = performance.now();
-          
-          // Limit sequence length
-          if (buttonCombos[playerId].sequence.length > 5) {
-              buttonCombos[playerId].sequence.shift();
-          }
-          
-          // Check for special move combo
-          if (checkSpecialMoveCombo(playerId)) {
-              executeSpecialMove(playerId);
-          }
-      }
-      
-      // Check if a special move combo is valid
-      function checkSpecialMoveCombo(playerId) {
-          const combo = buttonCombos[playerId].sequence;
-          const now = performance.now();
-          
-          // Check if combo is recent enough (all button presses within the time window)
-          if (combo.length < 3 || now - buttonCombos[playerId].lastPressTime > BUTTON_COMBO_TIMEOUT) {
-              // Reset combo if too old
-              if (now - buttonCombos[playerId].lastPressTime > BUTTON_COMBO_TIMEOUT) {
-                  buttonCombos[playerId].sequence = [];
-              }
-              return false;
-          }
-          
-          // Player 1 special move: hit, hit, kick
-          if (playerId === 'player1' && 
-              combo.length >= 3 && 
-              combo[combo.length-3] === 'hit' && 
-              combo[combo.length-2] === 'hit' && 
-              combo[combo.length-1] === 'kick') {
-              
-              // Clear the combo after successful detection
-              buttonCombos[playerId].sequence = [];
-              return true;
-          }
-          
-          // Player 2 special move: kick, kick, hit
-          if (playerId === 'player2' && 
-              combo.length >= 3 && 
-              combo[combo.length-3] === 'kick' && 
-              combo[combo.length-2] === 'kick' && 
-              combo[combo.length-1] === 'hit') {
-              
-              // Clear the combo after successful detection
-              buttonCombos[playerId].sequence = [];
-              return true;
-          }
-          
-          return false;
-      }
+// Add the missing setupRestartButton function after the handleKeyUp function (around line 1050)
 
-      // Execute a special move
-      function executeSpecialMove(playerId) {
-          if (!players[playerId]) return;
-          
-          // Check cooldown
-          if (specialMoveCooldowns[playerId] > 0) {
-              debug(`${playerId} special move on cooldown`);
-              return;
-          }
-          
-          // Set special move state
-          playerAnimations[playerId].state = SPECIAL_ATTACK;
-          playerAnimations[playerId].specialAttackFrame = 0;
-          
-          // Start cooldown
-          specialMoveCooldowns[playerId] = SPECIAL_MOVE_COOLDOWN;
-          
-          // Play special move sound
-          playSound('special');
-          
-          // Tell the server about the special move
-          if (socket) {
-              socket.emit('specialMove', { playerId: playerId });
-          }
-          
-          // Check for hit on opponent
-          const opponentId = playerId === 'player1' ? 'player2' : 'player1';
-          const attackerHitbox = calculateHitboxes(playerId);
-          const targetHitbox = calculateHitboxes(opponentId);
-          
-          if (attackerHitbox && targetHitbox) {
-              // Special moves have extended range
-              const specialRange = 80;
-              const dx = attackerHitbox.body.x - targetHitbox.body.x;
-              const dy = attackerHitbox.body.y - targetHitbox.body.y;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              
-              if (distance < specialRange) {
-                  // Check if target is invulnerable
-                  if (!targetHitbox.invulnerable) {
-                      // Apply special move damage
-                      if (socket) {
-                          socket.emit('registerHit', {
-                              attackerId: playerId,
-                              targetId: opponentId,
-                              damage: SPECIAL_MOVE_DAMAGE,
-                              hitZone: 'special',
-                              blocked: targetHitbox.blocking
-                          });
-                      }
-                      
-                      // Show special hit feedback
-                      hitFeedback = {
-                          active: true,
-                          x: targetHitbox.body.x,
-                          y: targetHitbox.body.y,
-                          type: 'special',
-                          time: performance.now()
-                      };
-                  } else {
-                      // Target is invulnerable
-                      hitFeedback = {
-                          active: true,
-                          x: targetHitbox.body.x,
-                          y: targetHitbox.body.y,
-                          type: 'invulnerable',
-                          time: performance.now()
-                      };
-                      
-                      playSound('invulnerable');
-                  }
-              }
-          }
-      }
+function setupRestartButton() {
+    const restartBtn = document.getElementById('restartBtn');
+    
+    // Add event handler for restart button
+    restartBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (socket && playerId) {
+            // Play button sound
+            playSound('button');
+            
+            // Send player ready status to server
+            socket.emit('playerReady', playerId);
+            
+            // Update button state
+            this.textContent = 'Waiting for other player...';
+            this.disabled = true;
+            
+            debug("Sent playerReady: " + playerId);
+        }
+    });
+}
 
-      // Execute a throw after grabbing
-      function executeThrow(attackerId, targetId) {
-          if (!players[attackerId] || !players[targetId]) return;
-          
-          // Set states
-          playerAnimations[attackerId].state = THROWING;
-          playerAnimations[targetId].state = THROWN;
-          
-          // Calculate throw direction
-          const throwDirection = attackerId === 'player1' ? 1 : -1;
-          
-          // Apply throw distance - send this to the server
-          if (socket) {
-              socket.emit('throwPlayer', {
-                  attackerId: attackerId,
-                  targetId: targetId,
-                  throwDistance: THROW_DISTANCE * throwDirection
-              });
-          }
-          
-          // Apply damage
-          if (socket) {
-              socket.emit('registerHit', {
-                  attackerId: attackerId,
-                  targetId: targetId,
-                  damage: THROW_DAMAGE,
-                  hitZone: 'throw',
-                  blocked: false
-              });
-          }
-          
-          // Play throw sound
-          playSound('throw');
-          
-          // Reset grab states
-          grabStates[attackerId].isGrabbing = false;
-          grabStates[attackerId].grabTarget = null;
-          grabStates[targetId].isBeingGrabbed = false;
-          
-          // Show throw feedback
-          const targetPos = calculatePlayerScreenPosition(targetId);
-          if (targetPos) {
-              hitFeedback = {
-                  active: true,
-                  x: targetPos.x + PLAYER_WIDTH / 2,
-                  y: targetPos.y + PLAYER_HEIGHT / 2,
-                  type: 'throw',
-                  time: performance.now()
-              };
-          }
-          
-          // Set a timeout to reset the thrown state
-          setTimeout(() => {
-              if (playerAnimations[targetId].state === THROWN) {
-                  playerAnimations[targetId].state = IDLE;
-              }
-          }, THROW_STUN_DURATION);
-      }
-      
-      // Draw hitboxes for debugging
-      function drawHitboxes() {
-          if (!players.player1 || !players.player2) return;
-          
-          const p1Hitbox = calculateHitboxes('player1');
-          const p2Hitbox = calculateHitboxes('player2');
-          
-          if (!p1Hitbox || !p2Hitbox) return;
-          
-          ctx.save();
-          
-          // Draw player 1 hitboxes
-          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-          ctx.lineWidth = 2;
-          
-          // Head
-          ctx.beginPath();
-          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Body
-          ctx.strokeRect(
-              p1Hitbox.body.x - p1Hitbox.body.width / 2,
-              p1Hitbox.body.y - p1Hitbox.body.height / 2,
-              p1Hitbox.body.width,
-              p1Hitbox.body.height
-          );
-          
-          // Attack point
-          if (p1Hitbox.attackPoint.active) {
-              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Draw attack range
-              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // Draw block area if blocking
-          if (p1Hitbox.blocking) {
-              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.body.x + 15, p1Hitbox.body.y, 20, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // NEW: Draw invulnerability indicator
-          if (p1Hitbox.invulnerable) {
-              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.rect(
-                  p1Hitbox.body.x - 25,
-                  p1Hitbox.head.y - 20,
-                  50,
-                  p1Hitbox.body.y + p1Hitbox.body.height / 2 - p1Hitbox.head.y + 30
-              );
-              ctx.stroke();
-              ctx.setLineDash([]);
-          }
-          
-          // Draw player 2 hitboxes
-          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
-          
-          // Head
-          ctx.beginPath();
-          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Body
-          ctx.strokeRect(
-              p2Hitbox.body.x - p2Hitbox.body.width / 2,
-              p2Hitbox.body.y - p2Hitbox.body.height / 2,
-              p2Hitbox.body.width,
-              p2Hitbox.body.height
-          );
-          
-          // Attack point
-          if (p2Hitbox.attackPoint.active) {
-              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Draw attack range
-              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // Draw block area if blocking
-          if (p2Hitbox.blocking) {
-              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.body.x - 15, p2Hitbox.body.y, 20, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // NEW: Draw invulnerability indicator
-          if (p2Hitbox.invulnerable) {
-              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.rect(
-                  p2Hitbox.body.x - 25,
-                  p2Hitbox.head.y - 20,
-                  50,
-                  p2Hitbox.body.y + p2Hitbox.body.height / 2 - p2Hitbox.head.y + 30
-              );
-              ctx.stroke();
-              ctx.setLineDash([]);
-          }
-          
-          ctx.restore();
-      }
+// Add the missing attemptGrab function after the executeSpecialMove function (around line 1400)
 
-      // Show grab escape instructions
-      function showGrabEscapeInstructions(playerId) {
-          if (!grabStates[playerId].isBeingGrabbed) return;
-          
-          // Get player position
-          const playerPos = calculatePlayerScreenPosition(playerId);
-          if (!playerPos) return;
-          
-          // Draw escape instructions
-          ctx.save();
-          
-          // Text background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(playerPos.x - 40, playerPos.y - 40, 110, 25);
-          
-          // Text
-          ctx.fillStyle = 'white';
-          ctx.font = '12px Arial';
-          ctx.textAlign = 'center';
-          ctx.fillText('Tap buttons to escape!', playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 25);
-          
-          ctx.restore();
-      }
+function attemptGrab(playerId) {
+    if (!players[playerId]) return;
+    
+    // Can't grab if already grabbing or being grabbed
+    if (grabStates[playerId].isGrabbing || grabStates[playerId].isBeingGrabbed) {
+        return;
+    }
+    
+    // Set grab attempt state
+    playerAnimations[playerId].state = GRAB_ATTEMPT;
+    
+    // Check for opponent in grab range
+    const opponentId = playerId === 'player1' ? 'player2' : 'player1';
+    const attackerHitbox = calculateHitboxes(playerId);
+    const targetHitbox = calculateHitboxes(opponentId);
+    
+    if (attackerHitbox && targetHitbox) {
+        const dx = attackerHitbox.body.x - targetHitbox.body.x;
+        const dy = attackerHitbox.body.y - targetHitbox.body.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < GRAB_RANGE) {
+            // Check if target is invulnerable or blocking
+            if (!targetHitbox.invulnerable && !targetHitbox.blocking) {
+                // Successful grab
+                grabStates[playerId].isGrabbing = true;
+                grabStates[playerId].grabTarget = opponentId;
+                grabStates[playerId].grabStartTime = performance.now();
+                
+                grabStates[opponentId].isBeingGrabbed = true;
+                
+                // Set animation states
+                playerAnimations[playerId].state = GRAB_ATTEMPT;
+                playerAnimations[opponentId].state = GRABBED;
+                
+                // Play grab sound
+                playSound('grab');
+                
+                debug(`${playerId} grabbed ${opponentId}`);
+            } else {
+                // Failed grab due to invulnerability or blocking
+                setTimeout(() => {
+                    if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
+                        playerAnimations[playerId].state = IDLE;
+                    }
+                }, 300);
+            }
+        } else {
+            // Failed grab due to distance
+            setTimeout(() => {
+                if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
+                    playerAnimations[playerId].state = IDLE;
+                }
+            }, 300);
+        }
+    }
+}
 
-      // Draw players
-      function drawPlayers() {
-          if (!players.player1 || !players.player2) return;
-          
-          // Calculate scale factor based on screen width
-          const scaleFactor = Math.min(1, gameWidth / 800);
-          const floorY = gameHeight - 50;
-          
-          // Draw player 1 (red)
-          drawPlayer('player1', scaleFactor, floorY);
-          
-          // Draw player 2 (blue)
-          drawPlayer('player2', scaleFactor, floorY);
-      }
+// Add the missing attemptGrabEscape function after the attemptGrab function
 
-      // Draw a single player
-      function drawPlayer(playerId, scaleFactor, floorY) {
-          const player = players[playerId];
-          const anim = playerAnimations[playerId];
-          
-          // Adjust player positions for smaller screens
-          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
-          const screenY = floorY - PLAYER_HEIGHT;
-          
-          // Set player color
-          const playerColor = playerId === 'player1' ? '#ff5555' : '#5555ff';
-          const outlineColor = playerId === 'player1' ? '#aa0000' : '#0000aa';
-          
-          // Apply animation offsets
-          let yOffset = 0;
-          if (anim.state === IDLE) {
-              yOffset = anim.breatheOffset;
-          } else if (anim.state === WALKING) {
-              yOffset = Math.sin(anim.walkCycle) * 3;
-          } else if (anim.state === VICTORY) {
-              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
-          } else if (anim.state === DEFEAT) {
-              yOffset = anim.defeatFall * 20;
-          }
-          
-          ctx.save();
-          
-          // Apply hurt animation rotation
-          if (anim.state === HURT) {
-              const centerX = screenX + PLAYER_WIDTH / 2;
-              const centerY = screenY + PLAYER_HEIGHT / 2;
-              
-              ctx.translate(centerX, centerY);
-              ctx.rotate(anim.hurtAngle);
-              ctx.translate(-centerX, -centerY);
-          }
-          
-          // NEW: Apply invulnerability effect
-          if (player.isInvulnerable) {
-              ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 100) * 0.3; // Pulsing effect
-          }
-          
-          // Draw stick figure
-          ctx.lineWidth = 4;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.strokeStyle = outlineColor;
-          
-          // Head
-          ctx.beginPath();
-          ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + 15 + yOffset, 10, 0, Math.PI * 2);
-          ctx.fillStyle = playerColor;
-          ctx.fill();
-          ctx.stroke();
-          
-          // Body
-          ctx.beginPath();
-          ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 25 + yOffset);
-          ctx.lineTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-          ctx.stroke();
-          
-          // Draw arms based on animation state
-          if (anim.state === HITTING) {
-              // Hitting animation - extend one arm
-              const punchExtension = 10;
-              const facingLeft = playerId === 'player2';
-              
-              // Back arm
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Punching arm
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 - punchExtension : 25 + punchExtension),
-                  screenY + 30 + yOffset
-              );
-              ctx.stroke();
-          } else if (anim.state === KICKING) {
-              // Kicking animation - extend one leg
-              const kickExtension = 15;
-              const facingLeft = playerId === 'player2';
-              
-              // Arms in ready position
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Standing leg
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 5 : -5),
-                  screenY + 80 + yOffset
-              );
-              ctx.stroke();
-              
-              // Kicking leg
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 - kickExtension : 30 + kickExtension),
-                  screenY + 60 + yOffset
-              );
-              ctx.stroke();
-          } else if (anim.state === BLOCKING) {
-              // Blocking animation - arms crossed in front
-              const facingLeft = playerId === 'player2';
-              
-              // Arms crossed in X shape
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
-                  screenY + 25 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Draw block shield effect
-              ctx.beginPath();
-              ctx.arc(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15),
-                  screenY + 35 + yOffset,
-                  15,
-                  0,
-                  Math.PI * 2
-              );
-              ctx.fillStyle = `rgba(255, 200, 50, 0.3)`;
-              ctx.fill();
-              ctx.strokeStyle = `rgba(255, 200, 50, 0.7)`;
-              ctx.stroke();
-              
-              // Legs in stable stance
-              ctx.strokeStyle = outlineColor;
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
-              ctx.stroke();
-          } else if (anim.state === VICTORY) {
-              // Victory animation - arms up
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 15 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 15 + yOffset);
-              ctx.stroke();
-              
-              // Legs
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
-              ctx.stroke();
-          } else if (anim.state === DEFEAT) {
-              // Defeat animation - slumped over
-              
-              // Arms hanging down
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 55 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 55 + yOffset);
-              ctx.stroke();
-              
-              // Legs crumpled
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 75 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 75 + yOffset);
-              ctx.stroke();
-          } else if (anim.state === WALKING) {
-              // Walking animation
-              const walkOffset = Math.sin(anim.walkCycle);
-              const facingLeft = playerId === 'player2';
-              
-              // Arms swinging
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? 15 : -15) + walkOffset * 5,
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -15 : 15) - walkOffset * 5,
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Legs walking
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + walkOffset * 10,
-                  screenY + 80 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 - walkOffset * 10,
-                  screenY + 80 + yOffset
-              );
-              ctx.stroke();
-          } else if (anim.state === SPECIAL_ATTACK) {
-              // Special attack animation
-              const facingLeft = playerId === 'player2';
-              
-              // Animate special attack (spinning attack)
-              const spinAngle = anim.specialAttackFrame * 0.5;
-              anim.specialAttackFrame += 0.2;
-              
-              // Rotate the entire player for spin attack
-              const centerX = screenX + PLAYER_WIDTH / 2;
-              const centerY = screenY + PLAYER_HEIGHT / 2;
-              
-              ctx.translate(centerX, centerY);
-              ctx.rotate(spinAngle);
-              ctx.translate(-centerX, -centerY);
-              
-              // Draw extended arms for special attack
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 25, screenY + 15 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 25, screenY + 15 + yOffset);
-              ctx.stroke();
-              
-              // Draw special effect
-              ctx.beginPath();
-              ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + PLAYER_HEIGHT / 2, 30, 0, Math.PI * 2);
-              ctx.fillStyle = playerId === 'player1' ? 'rgba(255, 50, 50, 0.3)' : 'rgba(50, 50, 255, 0.3)';
-              ctx.fill();
-              
-              // Add a second glowing effect
-              ctx.beginPath();
-              ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + PLAYER_HEIGHT / 2, 40, 0, Math.PI * 2);
-              ctx.fillStyle = playerId === 'player1' ? 'rgba(255, 50, 50, 0.1)' : 'rgba(50, 50, 255, 0.1)';
-              ctx.fill();
-              
-              // Reset special attack after a full rotation
-              if (spinAngle > Math.PI * 2) {
-                  anim.specialAttackFrame = 0;
-                  anim.state = IDLE;
-              }
-              
-              // Legs in wide stance
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
-              ctx.stroke();
-          }
-          else if (anim.state === GRAB_ATTEMPT) {
-              // Grab attempt animation - arms reaching forward
-              const facingLeft = playerId === 'player2';
-              
-              // Arms reaching forward
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -20 : 20),
-                  screenY + 25 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -20 : 20),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Legs in stable stance
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
-              ctx.stroke();
-          }
-          else if (anim.state === GRABBED) {
-              // Being grabbed animation - arms pinned
-              
-              // Arms pinned to sides
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 5, screenY + 55 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 5, screenY + 55 + yOffset);
-              ctx.stroke();
-              
-              // Legs slightly bent
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 8, screenY + 75 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 8, screenY + 75 + yOffset);
-              ctx.stroke();
-          }
-          else if (anim.state === THROWING) {
-              // Throwing animation - arms extended forcefully
-              const facingLeft = playerId === 'player2';
-              
-              // Arms extended in throwing motion
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 : 30),
-                  screenY + 25 + yOffset
-              );
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(
-                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 : 25),
-                  screenY + 45 + yOffset
-              );
-              ctx.stroke();
-              
-              // Legs in wide stance
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              // Reset to idle after animation completes
-              anim.throwFrame++;
-              if (anim.throwFrame > 10) {
-                  anim.throwFrame = 0;
-                  anim.state = IDLE;
-              }
-          }
-          else if (anim.state === THROWN) {
-              // Being thrown animation - tumbling in air
-              
-              // Rotate the player to show tumbling
-              const centerX = screenX + PLAYER_WIDTH / 2;
-              const centerY = screenY + PLAYER_HEIGHT / 2;
-              
-              ctx.translate(centerX, centerY);
-              ctx.rotate(anim.thrownFrame * 0.3);
-              ctx.translate(-centerX, -centerY);
-              
-              // Arms flailing
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 20, screenY + 25 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 20, screenY + 45 + yOffset);
-              ctx.stroke();
-              
-              // Legs flailing
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 20, screenY + 65 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 20, screenY + 75 + yOffset);
-              ctx.stroke();
-              
-              // Increment thrown animation frame
-              anim.thrownFrame++;
-          } else {
-              // Default idle pose
-              
-              // Arms
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 45 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 45 + yOffset);
-              ctx.stroke();
-              
-              // Legs
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
-              ctx.stroke();
-              
-              ctx.beginPath();
-              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
-              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
-              ctx.stroke();
-          }
-          
-          ctx.restore();
-      }
+function attemptGrabEscape(playerId) {
+    if (!grabStates[playerId].isBeingGrabbed) return;
+    
+    // Increment escape attempts
+    grabStates[playerId].escapeAttempts++;
+    
+    // Calculate escape chance based on attempts
+    const escapeChance = grabStates[playerId].escapeAttempts * (10 / GRAB_ESCAPE_DIFFICULTY);
+    
+    // Random check for escape
+    if (Math.random() * 100 < escapeChance) {
+        // Successful escape
+        const grabberId = playerId === 'player1' ? 'player2' : 'player1';
+        
+        // Reset grab states
+        grabStates[grabberId].isGrabbing = false;
+        grabStates[grabberId].grabTarget = null;
+        grabStates[playerId].isBeingGrabbed = false;
+        grabStates[playerId].escapeAttempts = 0;
+        
+        // Reset animation states
+        playerAnimations[grabberId].state = IDLE;
+        playerAnimations[playerId].state = IDLE;
+        
+        debug(`${playerId} escaped from grab`);
+    }
+}
 
-      // Draw background
-      function drawBackground() {
-          // Simple gradient background
-          const gradient = ctx.createLinearGradient(0, 0, 0, gameHeight);
-          gradient.addColorStop(0, '#4a6a8a');
-          gradient.addColorStop(1, '#2a3a4a');
-          
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, gameWidth, gameHeight);
-          
-          // Draw floor
-          ctx.fillStyle = '#554433';
-          ctx.fillRect(0, gameHeight - 50, gameWidth, 50);
-      }
+// Add the missing handleGrabEscapeButtonPress function
 
-      // Show winner message
-      function showWinner(winnerId) {
-          const winnerMessage = document.getElementById('winnerMessage');
-          const winnerText = document.getElementById('winnerText');
-          
-          // Set winner text
-          winnerText.textContent = `${winnerId === 'player1' ? 'Player 1' : 'Player 2'} Wins!`;
-          
-          // Show the message
-          winnerMessage.style.display = 'block';
-          
-          // Reset ready status
-          updateReadyStatus();
-          
-          // Play victory sound
-          playSound('victory');
-      }
-  </script>
+function handleGrabEscapeButtonPress(playerId) {
+    if (grabStates[playerId].isBeingGrabbed) {
+        // Send grab escape attempt to server
+        if (socket) {
+            socket.emit('grabEscape', { playerId: playerId });
+        }
+        
+        // Also try locally
+        attemptGrabEscape(playerId);
+    }
+}
+
+// Add the missing gameLoop function after the resizeCanvas function (around line 600)
+
+function gameLoop(timestamp) {
+    // Calculate delta time for smooth animations
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+    
+    // Update animation frame
+    animationFrame += ANIMATION_SPEED * (deltaTime / 16.67); // Normalize to ~60fps
+    
+    // Update player animations
+    updatePlayerAnimations(deltaTime);
+    
+    // Update block cooldowns
+    updateBlockCooldowns(deltaTime);
+
+    // Update special move cooldowns
+    updateSpecialMoveCooldowns(deltaTime);
+
+    // Update grab states
+    updateGrabStates(deltaTime);
+    
+    // Update hit detection (only if game is active and not ending)
+    if (gameStarted && !gameEnding) {
+        checkHits();
+    }
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, gameWidth, gameHeight);
+    
+    // Draw game elements
+    drawBackground();
+
+    // Always draw players, even if game is not started
+    if (players.player1 && players.player2) {
+        drawPlayers();
+    }
+
+    // Draw hit feedback and power bars if game is active or ending
+    if (gameStarted || gameEnding) {
+        drawHitFeedback();
+        drawPowerBars();
+
+        // Draw special move cooldowns
+        if (specialMoveCooldowns.player1 > 0) {
+            showSpecialMoveCooldown('player1');
+        }
+        if (specialMoveCooldowns.player2 > 0) {
+            showSpecialMoveCooldown('player2');
+        }
+        // drawHitboxes(); // Uncomment for debugging
+    }
+
+    // Show grab escape instructions
+    if (gameStarted && !gameEnding) {
+        if (grabStates.player1.isBeingGrabbed) {
+            showGrabEscapeInstructions('player1');
+        }
+        if (grabStates.player2.isBeingGrabbed) {
+            showGrabEscapeInstructions('player2');
+        }
+    }
+    
+    // Continue the game loop
+    requestAnimationFrame(gameLoop);
+}
+
+// Add the missing updatePlayerAnimations function
+
+function updatePlayerAnimations(deltaTime) {
+    // Update player 1 animations
+    updatePlayerAnimation('player1', deltaTime);
+    
+    // Update player 2 animations
+    updatePlayerAnimation('player2', deltaTime);
+}
+
+// Add the missing updateGrabStates function
+
+function updateGrabStates(deltaTime) {
+    const now = performance.now();
+    
+    // Check player 1 grab state
+    if (grabStates.player1.isGrabbing && grabStates.player1.grabTarget) {
+        // Check if grab duration has expired - time to throw
+        if (now - grabStates.player1.grabStartTime > GRAB_DURATION) {
+            executeThrow('player1', grabStates.player1.grabTarget);
+        }
+    }
+    
+    // Check player 2 grab state
+    if (grabStates.player2.isGrabbing && grabStates.player2.grabTarget) {
+        // Check if grab duration has expired - time to throw
+        if (now - grabStates.player2.grabStartTime > GRAB_DURATION) {
+            executeThrow('player2', grabStates.player2.grabTarget);
+        }
+    }
+}
+
+// Add the missing showSpecialMoveCooldown function
+
+function showSpecialMoveCooldown(playerId) {
+    if (specialMoveCooldowns[playerId] <= 0) return;
+    
+    // Calculate cooldown percentage
+    const cooldownPercent = specialMoveCooldowns[playerId] / SPECIAL_MOVE_COOLDOWN;
+    
+    // Get player position
+    const playerPos = calculatePlayerScreenPosition(playerId);
+    if (!playerPos) return;
+    
+    // Draw cooldown indicator
+    ctx.save();
+    
+    // Background circle
+    ctx.beginPath();
+    ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fill();
+    
+    // Cooldown fill (clockwise from top)
+    ctx.beginPath();
+    ctx.moveTo(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
+    ctx.arc(
+        playerPos.x + PLAYER_WIDTH / 2, 
+        playerPos.y - 20, 
+        15, 
+        -Math.PI / 2, 
+        -Math.PI / 2 + (1 - cooldownPercent) * Math.PI * 2
+    );
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(180, 50, 200, 0.7)';
+    ctx.fill();
+    
+    // Border
+    ctx.beginPath();
+    ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Special move icon
+    ctx.fillStyle = 'white';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('S', playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
+    
+    ctx.restore();
+}
+
+// Add the missing drawHitFeedback function
+
+function drawHitFeedback() {
+    if (!hitFeedback.active) return;
+    
+    const now = performance.now();
+    const elapsed = now - hitFeedback.time;
+    
+    if (elapsed > HIT_FEEDBACK_DURATION) {
+        hitFeedback.active = false;
+        return;
+    }
+    
+    // Calculate animation progress (0 to 1)
+    const progress = elapsed / HIT_FEEDBACK_DURATION;
+    const size = 20 + progress * 30;
+    const opacity = 1 - progress;
+    
+    ctx.save();
+    
+    // Draw hit effect
+    if (hitFeedback.type === 'critical') {
+        // Critical hit effect (red burst)
+        ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
+        ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+    } else if (hitFeedback.type === 'blocked') {
+        // Blocked hit effect (yellow/gold burst)
+        ctx.fillStyle = `rgba(255, 200, 50, ${opacity})`;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+    } else if (hitFeedback.type === 'special') {
+        // Special move hit effect (purple/yellow burst)
+        ctx.fillStyle = `rgba(180, 50, 200, ${opacity})`;
+        ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+    }
+    else if (hitFeedback.type === 'throw') {
+        // Throw hit effect (orange burst)
+        ctx.fillStyle = `rgba(255, 120, 0, ${opacity})`;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+    } else if (hitFeedback.type === 'invulnerable') {
+        // NEW: Invulnerable hit effect (blue burst)
+        ctx.fillStyle = `rgba(74, 144, 226, ${opacity})`;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+    } else {
+        // Normal hit effect (white burst)
+        ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.strokeStyle = `rgba(200, 200, 200, ${opacity})`;
+    }
+    
+    // Draw burst
+    ctx.beginPath();
+    ctx.arc(hitFeedback.x, hitFeedback.y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw impact lines
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 8; i++) {
+        const angle = Math.PI * 2 * i / 8;
+        const innerRadius = size / 2;
+        const outerRadius = size;
+        
+        ctx.beginPath();
+        ctx.moveTo(
+            hitFeedback.x + Math.cos(angle) * innerRadius,
+            hitFeedback.y + Math.sin(angle) * innerRadius
+        );
+        ctx.lineTo(
+            hitFeedback.x + Math.cos(angle) * outerRadius,
+            hitFeedback.y + Math.sin(angle) * outerRadius
+        );
+        ctx.stroke();
+    }
+    
+    ctx.restore();
+}
+
+// Add the missing drawPowerBars function
+
+function drawPowerBars() {
+    if (!players.player1 || !players.player2) return;
+    
+    const barWidth = Math.min(300, gameWidth * 0.4);
+    const barHeight = 20;
+    const margin = 10;
+    
+    ctx.save();
+    
+    // Player 1 power bar (left side)
+    const p1Power = players.player1.power / MAX_POWER;
+    
+    // Bar background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(margin, margin, barWidth, barHeight);
+    
+    // Bar fill
+    ctx.fillStyle = p1Power > 0.3 ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 50, 50, 0.4)';
+    ctx.fillRect(margin, margin, barWidth * p1Power, barHeight);
+    
+    // Bar border
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(margin, margin, barWidth, barHeight);
+    
+    // Player 2 power bar (right side)
+    const p2Power = players.player2.power / MAX_POWER;
+    
+    // Bar background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+    
+    // Bar fill (right-aligned)
+    ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
+    ctx.fillRect(gameWidth - margin - barWidth * p2Power, margin, barWidth * p2Power, barHeight);
+    
+    // Bar border
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+    
+    ctx.restore();
+}
+
+// Add the missing checkHits function
+
+function checkHits() {
+    if (!gameStarted || !players.player1 || !players.player2 || gameEnding) return;
+    
+    // Don't check hits too frequently
+    const now = performance.now();
+    if (now - lastHitTime < HIT_COOLDOWN) return;
+    
+    // Calculate hitboxes
+    const p1Hitbox = calculateHitboxes('player1');
+    const p2Hitbox = calculateHitboxes('player2');
+    
+    if (!p1Hitbox || !p2Hitbox) return;
+    
+    // Check player 1 attacking player 2
+    if (p1Hitbox.attackPoint.active && players.player1.state !== HURT && 
+        !grabStates.player1.isBeingGrabbed && !grabStates.player2.isBeingGrabbed) {
+        const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
+        if (hit) {
+            // NEW: Check if target is invulnerable
+            if (!p2Hitbox.invulnerable) {
+                applyHit('player1', 'player2', p1Hitbox.attackPoint, hit, p2Hitbox.blocking);
+            } else {
+                // Play invulnerable sound
+                playSound('invulnerable');
+                
+                // Show invulnerable feedback
+                hitFeedback = {
+                    active: true,
+                    x: hit.point.x,
+                    y: hit.point.y,
+                    type: 'invulnerable',
+                    time: performance.now()
+                };
+            }
+        }
+    }
+    
+    // Check player 2 attacking player 1
+    if (p2Hitbox.attackPoint.active && players.player2.state !== HURT && 
+        !grabStates.player2.isBeingGrabbed && !grabStates.player1.isBeingGrabbed) {
+        const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
+        if (hit) {
+            // NEW: Check if target is invulnerable
+            if (!p1Hitbox.invulnerable) {
+                applyHit('player2', 'player1', p2Hitbox.attackPoint, hit, p1Hitbox.blocking);
+            } else {
+                // Play invulnerable sound
+                playSound('invulnerable');
+                
+                // Show invulnerable feedback
+                hitFeedback = {
+                    active: true,
+                    x: hit.point.x,
+                    y: hit.point.y,
+                    type: 'invulnerable',
+                    time: performance.now()
+                };
+            }
+        }
+    }
+}
+
+// Add the missing detectHit function
+
+function detectHit(attackPoint, targetHitbox) {
+    // Get attack range (or default to 10)
+    const range = attackPoint.range || 10;
+    
+    // Check head hit (circular collision)
+    const dx = attackPoint.x - targetHitbox.head.x;
+    const dy = attackPoint.y - targetHitbox.head.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance < targetHitbox.head.radius + range) {
+        return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
+    }
+    
+    // Check body hit (rectangular collision with expanded range)
+    const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2 - range;
+    const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2 + range;
+    const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2 - range;
+    const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2 + range;
+    
+    if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
+        attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
+        return { zone: 'body', point: { x: attackPoint.x, y: attackPoint.y } };
+    }
+    
+    return null;
+}
+
+// Add the missing applyHit function
+
+function applyHit(attackerId, targetId, attackPoint, hit, isBlocking) {
+    // Don't register hits if the game is over
+    if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
+    
+    lastHitTime = performance.now();
+    
+    // Calculate damage based on attack type and hit zone
+    let damage = attackPoint.type === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
+    
+    // Critical hit for headshots
+    if (hit.zone === 'head') {
+        damage *= CRITICAL_HIT_MULTIPLIER;
+    }
+    
+    // Reduce damage if blocking
+    if (isBlocking) {
+        damage *= (1 - BLOCK_DAMAGE_REDUCTION);
+        
+        // Play block hit sound
+        playSound('blockHit');
+    }
+    
+    // NEW: Update combo counter
+    const now = performance.now();
+    const timeSinceLastHit = now - lastHitTimes[targetId];
+    
+    // Reset combo if it's been a while since the last hit
+    if (timeSinceLastHit > COMBO_RESET_TIME) {
+        comboCounts[attackerId] = 0;
+    }
+    
+    // Increment combo counter
+    comboCounts[attackerId]++;
+    
+    // Update last hit time
+    lastHitTimes[targetId] = now;
+    
+    // Send attack to server
+    if (socket) {
+        socket.emit('registerHit', {
+            attackerId: attackerId,
+            targetId: targetId,
+            damage: damage,
+            hitZone: hit.zone,
+            blocked: isBlocking,
+            comboCount: comboCounts[attackerId] // NEW: Send combo count
+        });
+    }
+    
+    // Show hit feedback
+    hitFeedback = {
+        active: true,
+        x: hit.point.x,
+        y: hit.point.y,
+        type: isBlocking ? 'blocked' : (hit.zone === 'head' ? 'critical' : 'normal'),
+        time: performance.now()
+    };
+}
+
+// Add the missing calculateHitboxes function
+
+function calculateHitboxes(playerId) {
+    if (!players[playerId]) return null;
+    
+    const player = players[playerId];
+    const anim = playerAnimations[playerId];
+    const facingLeft = playerId === 'player2'; // Player 2 faces left
+    
+    // Calculate scale factor based on screen width
+    const scaleFactor = Math.min(1, gameWidth / 800);
+    const floorY = gameHeight - 50;
+    
+    // Adjust player positions for smaller screens
+    const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
+    const screenY = floorY - PLAYER_HEIGHT;
+    
+    // Apply animation offsets
+    let yOffset = 0;
+    if (anim.state === VICTORY) {
+        yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
+    } else if (anim.state === DEFEAT) {
+        yOffset = anim.defeatFall * 20;
+    }
+    
+    // Calculate center point
+    const centerX = screenX + PLAYER_WIDTH / 2;
+    const headY = screenY + 10 + anim.breatheOffset + yOffset;
+    
+    // Calculate attack point (where hits land)
+    let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
+    let attackY = screenY + 25 + yOffset;
+    let attackRange = 10; // Default attack range
+
+    if (anim.state === HITTING) {
+        attackRange = 10;
+    } else if (anim.state === KICKING) {
+        // Extend kick range and adjust position
+        attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH - 10 : LEG_HITBOX_WIDTH + 10);
+        attackY = screenY + 60 + yOffset;
+        attackRange = 15; // Larger range for kicks
+    }
+    
+    return {
+        id: playerId,
+        head: {
+            x: centerX,
+            y: headY,
+            radius: HEAD_HITBOX_RADIUS
+        },
+        body: {
+            x: centerX,
+            y: screenY + 35 + yOffset,
+            width: BODY_HITBOX_WIDTH,
+            height: BODY_HITBOX_HEIGHT
+        },
+        attackPoint: {
+            x: attackX,
+            y: attackY,
+            active: anim.state === HITTING || anim.state === KICKING,
+            type: anim.state === HITTING ? 'hit' : 'kick',
+            range: attackRange
+        },
+        blocking: anim.state === BLOCKING,
+        // NEW: Add invulnerability status to hitbox
+        invulnerable: player.isInvulnerable || false
+    };
+}
+</script>
 </body>
 </html>
