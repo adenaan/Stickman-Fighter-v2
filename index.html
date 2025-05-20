@@ -108,6 +108,19 @@
       .block-btn.active {
           background-color: rgba(255, 200, 50, 0.9);
       }
+      /* NEW: Special move button styles */
+      .special-btn {
+          background-color: rgba(180, 50, 200, 0.7);
+      }
+      .special-btn.active {
+          background-color: rgba(180, 50, 200, 0.9);
+      }
+      .grab-btn {
+          background-color: rgba(255, 120, 0, 0.7);
+      }
+      .grab-btn.active {
+          background-color: rgba(255, 120, 0, 0.9);
+      }
       /* Button ripple effect */
       .control-btn::after {
           content: '';
@@ -406,6 +419,40 @@
           player2: 0
       };
 
+      // NEW: Special move variables
+      let specialMoveCooldowns = {
+          player1: 0,
+          player2: 0
+      };
+      let buttonCombos = {
+          player1: {
+              sequence: [],
+              lastPressTime: 0
+          },
+          player2: {
+              sequence: [],
+              lastPressTime: 0
+          }
+      };
+
+      // NEW: Grab/throw variables
+      let grabStates = {
+          player1: {
+              isGrabbing: false,
+              grabTarget: null,
+              grabStartTime: 0,
+              isBeingGrabbed: false,
+              escapeAttempts: 0
+          },
+          player2: {
+              isGrabbing: false,
+              grabTarget: null,
+              grabStartTime: 0,
+              isBeingGrabbed: false,
+              escapeAttempts: 0
+          }
+      };
+
       const GLITCH_SERVER_URL = "https://stickmanfightingnew.glitch.me";
       
       // Sound variables
@@ -434,6 +481,19 @@
       const COMBO_LIMIT = 3; // Maximum number of consecutive hits before forced invulnerability
       const COMBO_RESET_TIME = 3000; // Time after which combo counter resets
 
+      // NEW: Special move constants
+      const SPECIAL_MOVE_DAMAGE = 25;
+      const SPECIAL_MOVE_COOLDOWN = 3000; // 3 seconds cooldown
+      const BUTTON_COMBO_TIMEOUT = 500; // Time window for button combinations (ms)
+
+      // NEW: Grab/throw constants
+      const GRAB_RANGE = 30; // Distance for grab attempts
+      const GRAB_DURATION = 1000; // How long a grab lasts before throw (ms)
+      const THROW_DAMAGE = 20; // Damage from being thrown
+      const THROW_DISTANCE = 150; // How far the opponent is thrown
+      const THROW_STUN_DURATION = 1000; // How long the thrown player is stunned (ms)
+      const GRAB_ESCAPE_DIFFICULTY = 5; // Higher = harder to escape (1-10)
+
       // Hit detection constants
       const HEAD_HITBOX_RADIUS = 10;
       const BODY_HITBOX_WIDTH = 20;
@@ -454,6 +514,13 @@
       const VICTORY = 'victory';
       const DEFEAT = 'defeat';
       
+      // NEW: Special move states
+      const SPECIAL_ATTACK = 'special';
+      const GRAB_ATTEMPT = 'grab';
+      const GRABBED = 'grabbed';
+      const THROWING = 'throwing';
+      const THROWN = 'thrown';
+      
       // Animation variables
       let animationFrame = 0;
       const ANIMATION_SPEED = 0.1; // Lower is slower
@@ -471,7 +538,11 @@
               hurtDirection: 1,
               victoryJump: 0,
               defeatFall: 0,
-              blockStart: 0 // When block started
+              blockStart: 0, // When block started
+              specialAttackFrame: 0,
+              grabFrame: 0,
+              throwFrame: 0,
+              thrownFrame: 0,
           },
           player2: {
               state: IDLE,
@@ -483,7 +554,11 @@
               hurtDirection: -1,
               victoryJump: 0,
               defeatFall: 0,
-              blockStart: 0 // When block started
+              blockStart: 0, // When block started
+              specialAttackFrame: 0,
+              grabFrame: 0,
+              throwFrame: 0,
+              thrownFrame: 0,
           }
       };
       
@@ -592,7 +667,10 @@
               button: '/Stickman-Fighter-v2/assets/button-press.mp3',
               block: '/Stickman-Fighter-v2/assets/block.mp3', // New block sound
               blockHit: '/Stickman-Fighter-v2/assets/block-hit.mp3', // New block hit sound
-              invulnerable: '/Stickman-Fighter-v2/assets/block.mp3' // NEW: Reuse block sound for invulnerability
+              invulnerable: '/Stickman-Fighter-v2/assets/block.mp3', // NEW: Reuse block sound for invulnerability
+              special: '/Stickman-Fighter-v2/assets/special.mp3', // Special move sound
+              grab: '/Stickman-Fighter-v2/assets/block.mp3', // Reuse block sound for grab
+              throw: '/Stickman-Fighter-v2/assets/kick.mp3', // Reuse kick sound for throw
           };
           
           let loadedCount = 0;
@@ -939,6 +1017,13 @@
                       }
                   }
               });
+
+              // Handle grab escape attempts
+              socket.on('grabEscape', function(data) {
+                  if (!gameStarted || !data.playerId) return;
+                  
+                  attemptGrabEscape(data.playerId);
+              });
           } catch (error) {
               console.error('Error connecting to server:', error);
               document.getElementById('waitingMessage').textContent = 'Failed to connect to server. Please try again.';
@@ -1090,6 +1175,30 @@
           // NEW: Hide invulnerability effects
           updateInvulnerabilityEffect('player1', false);
           updateInvulnerabilityEffect('player2', false);
+
+          // Reset special move cooldowns
+          specialMoveCooldowns.player1 = 0;
+          specialMoveCooldowns.player2 = 0;
+
+          // Reset button combos
+          buttonCombos.player1.sequence = [];
+          buttonCombos.player2.sequence = [];
+
+          // Reset grab states
+          grabStates.player1 = {
+              isGrabbing: false,
+              grabTarget: null,
+              grabStartTime: 0,
+              isBeingGrabbed: false,
+              escapeAttempts: 0
+          };
+          grabStates.player2 = {
+              isGrabbing: false,
+              grabTarget: null,
+              grabStartTime: 0,
+              isBeingGrabbed: false,
+              escapeAttempts: 0
+          };
       }
       
       // Update animation state based on player state
@@ -1156,6 +1265,8 @@
               <button class="control-btn hit-btn" id="hitBtn">HIT</button>
               <button class="control-btn kick-btn" id="kickBtn">KICK</button>
               <button class="control-btn block-btn" id="blockBtn">BLOCK</button>
+              <button class="control-btn special-btn" id="specialBtn">SPECIAL</button>
+              <button class="control-btn grab-btn" id="grabBtn">GRAB</button>
           `;
           
           controlsContainer.appendChild(playerControls);
@@ -1171,6 +1282,8 @@
           const hitBtn = document.getElementById('hitBtn');
           const kickBtn = document.getElementById('kickBtn');
           const blockBtn = document.getElementById('blockBtn');
+          const specialBtn = document.getElementById('specialBtn');
+          const grabBtn = document.getElementById('grabBtn');
           
           // Clear any existing event listeners (just in case)
           moveLeftBtn.replaceWith(moveLeftBtn.cloneNode(true));
@@ -1178,6 +1291,8 @@
           hitBtn.replaceWith(hitBtn.cloneNode(true));
           kickBtn.replaceWith(kickBtn.cloneNode(true));
           blockBtn.replaceWith(blockBtn.cloneNode(true));
+          specialBtn.replaceWith(specialBtn.cloneNode(true));
+          grabBtn.replaceWith(grabBtn.cloneNode(true));
           
           // Get the fresh elements
           const newMoveLeftBtn = document.getElementById('moveLeft');
@@ -1185,38 +1300,84 @@
           const newHitBtn = document.getElementById('hitBtn');
           const newKickBtn = document.getElementById('kickBtn');
           const newBlockBtn = document.getElementById('blockBtn');
+          const newSpecialBtn = document.getElementById('specialBtn');
+          const newGrabBtn = document.getElementById('grabBtn');
           
           // Add touch start event listeners
           newMoveLeftBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
           });
           
           newMoveRightBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
           });
           
           newHitBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
           });
           
           newKickBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
           newBlockBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding && canBlock(playerId)) {
                   socket.emit('block', {blocking: true});
                   startBlockCooldown(playerId);
+              }
+          });
+
+          newSpecialBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding && specialMoveCooldowns[playerId] <= 0) {
+                  executeSpecialMove(playerId);
+              }
+          });
+
+          newGrabBtn.addEventListener('touchstart', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
+              e.preventDefault();
+              this.classList.add('active');
+              if (socket && !gameEnding) {
+                  attemptGrab(playerId);
               }
           });
           
@@ -1248,33 +1409,85 @@
               this.classList.remove('active');
               if (socket && !gameEnding) socket.emit('block', {blocking: false});
           });
+
+          newSpecialBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
+
+          newGrabBtn.addEventListener('touchend', function(e) {
+              e.preventDefault();
+              this.classList.remove('active');
+          });
           
           // For mouse users (testing)
           newMoveLeftBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('move', {direction: 'left'});
           });
           
           newMoveRightBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('move', {direction: 'right'});
           });
           
           newHitBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
           });
           
           newKickBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
           });
           
           newBlockBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
               this.classList.add('active');
               if (socket && !gameEnding && canBlock(playerId)) {
                   socket.emit('block', {blocking: true});
                   startBlockCooldown(playerId);
+              }
+          });
+
+          newSpecialBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
+              this.classList.add('active');
+              if (socket && !gameEnding && specialMoveCooldowns[playerId] <= 0) {
+                  executeSpecialMove(playerId);
+              }
+          });
+
+          newGrabBtn.addEventListener('mousedown', function(e) {
+              if (grabStates[playerId].isBeingGrabbed) {
+                  handleGrabEscapeButtonPress(playerId);
+                  return;
+              }
+              this.classList.add('active');
+              if (socket && !gameEnding) {
+                  attemptGrab(playerId);
               }
           });
           
@@ -1299,6 +1512,14 @@
           newBlockBtn.addEventListener('mouseup', function(e) {
               this.classList.remove('active');
               if (socket && !gameEnding) socket.emit('block', {blocking: false});
+          });
+
+          newSpecialBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
+          });
+
+          newGrabBtn.addEventListener('mouseup', function(e) {
+              this.classList.remove('active');
           });
           
           // Stop movement when mouse is released
@@ -1382,6 +1603,16 @@
                       startBlockCooldown(playerId);
                   }
               }
+              else if (e.key === 'f') {
+                  buttonId = 'specialBtn';
+                  if (specialMoveCooldowns[playerId] <= 0) {
+                      executeSpecialMove(playerId);
+                  }
+              }
+              else if (e.key === 'r') {
+                  buttonId = 'grabBtn';
+                  attemptGrab(playerId);
+              }
           }
           // Player 2 controls
           else if (playerId === 'player2') {
@@ -1407,6 +1638,16 @@
                       command = {type: 'block', data: {blocking: true}};
                       startBlockCooldown(playerId);
                   }
+              }
+              else if (e.key === '/') {
+                  buttonId = 'specialBtn';
+                  if (specialMoveCooldowns[playerId] <= 0) {
+                      executeSpecialMove(playerId);
+                  }
+              }
+              else if (e.key === 'm') {
+                  buttonId = 'grabBtn';
+                  attemptGrab(playerId);
               }
           }
           
@@ -1457,6 +1698,12 @@
                   buttonId = 'blockBtn';
                   shouldStopBlock = true;
               }
+              else if (e.key === 'f') {
+                  buttonId = 'specialBtn';
+              }
+              else if (e.key === 'r') {
+                  buttonId = 'grabBtn';
+              }
           }
           // Player 2 controls
           else if (playerId === 'player2') {
@@ -1477,6 +1724,12 @@
               else if (e.key === 'ArrowDown') {
                   buttonId = 'blockBtn';
                   shouldStopBlock = true;
+              }
+              else if (e.key === '/') {
+                  buttonId = 'specialBtn';
+              }
+              else if (e.key === 'm') {
+                  buttonId = 'grabBtn';
               }
           }
           
@@ -1537,6 +1790,12 @@
           // Update block cooldowns
           updateBlockCooldowns(deltaTime);
 
+          // Update special move cooldowns
+          updateSpecialMoveCooldowns(deltaTime);
+
+          // Update grab states
+          updateGrabStates(deltaTime);
+          
           // Update hit detection (only if game is active and not ending)
           if (gameStarted && !gameEnding) {
               checkHits();
@@ -1557,7 +1816,25 @@
           if (gameStarted || gameEnding) {
               drawHitFeedback();
               drawPowerBars();
+
+              // Draw special move cooldowns
+              if (specialMoveCooldowns.player1 > 0) {
+                  showSpecialMoveCooldown('player1');
+              }
+              if (specialMoveCooldowns.player2 > 0) {
+                  showSpecialMoveCooldown('player2');
+              }
               // drawHitboxes(); // Uncomment for debugging
+          }
+
+          // Show grab escape instructions
+          if (gameStarted && !gameEnding) {
+              if (grabStates.player1.isBeingGrabbed) {
+                  showGrabEscapeInstructions('player1');
+              }
+              if (grabStates.player2.isBeingGrabbed) {
+                  showGrabEscapeInstructions('player2');
+              }
           }
           
           // Continue the game loop
@@ -1605,7 +1882,43 @@
               }
           }
       }
-      
+
+      // Update special move cooldowns
+      function updateSpecialMoveCooldowns(deltaTime) {
+          // Update player 1 cooldown
+          if (specialMoveCooldowns.player1 > 0) {
+              specialMoveCooldowns.player1 -= deltaTime;
+              if (specialMoveCooldowns.player1 < 0) specialMoveCooldowns.player1 = 0;
+          }
+          
+          // Update player 2 cooldown
+          if (specialMoveCooldowns.player2 > 0) {
+              specialMoveCooldowns.player2 -= deltaTime;
+              if (specialMoveCooldowns.player2 < 0) specialMoveCooldowns.player2 = 0;
+          }
+      }
+
+      // Update grab states
+      function updateGrabStates(deltaTime) {
+          const now = performance.now();
+          
+          // Check player 1 grab state
+          if (grabStates.player1.isGrabbing && grabStates.player1.grabTarget) {
+              // Check if grab duration has expired - time to throw
+              if (now - grabStates.player1.grabStartTime > GRAB_DURATION) {
+                  executeThrow('player1', grabStates.player1.grabTarget);
+              }
+          }
+          
+          // Check player 2 grab state
+          if (grabStates.player2.isGrabbing && grabStates.player2.grabTarget) {
+              // Check if grab duration has expired - time to throw
+              if (now - grabStates.player2.grabStartTime > GRAB_DURATION) {
+                  executeThrow('player2', grabStates.player2.grabTarget);
+              }
+          }
+      }
+
       // Update player animations
       function updatePlayerAnimations(deltaTime) {
           // Update player 1 animations
@@ -1665,6 +1978,259 @@
                   anim.defeatFall += 0.02 * (deltaTime / 16.67);
                   if (anim.defeatFall > 1) anim.defeatFall = 1;
               }
+          }
+      }
+
+      // Execute a throw after grabbing
+      function executeThrow(attackerId, targetId) {
+          if (!players[attackerId] || !players[targetId]) return;
+          
+          // Set states
+          playerAnimations[attackerId].state = THROWING;
+          playerAnimations[targetId].state = THROWN;
+          
+          // Calculate throw direction
+          const throwDirection = attackerId === 'player1' ? 1 : -1;
+          
+          // Apply throw distance
+          players[targetId].x += THROW_DISTANCE * throwDirection;
+          
+          // Constrain to game boundaries
+          players[targetId].x = Math.max(0, Math.min(800, players[targetId].x));
+          
+          // Apply damage
+          if (socket) {
+              socket.emit('registerHit', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  damage: THROW_DAMAGE,
+                  hitZone: 'throw',
+                  blocked: false
+              });
+          }
+          
+          // Play throw sound
+          playSound('throw');
+          
+          // Reset grab states
+          grabStates[attackerId].isGrabbing = false;
+          grabStates[attackerId].grabTarget = null;
+          grabStates[targetId].isBeingGrabbed = false;
+          
+          // Show throw feedback
+          const targetPos = calculatePlayerScreenPosition(targetId);
+          if (targetPos) {
+              hitFeedback = {
+                  active: true,
+                  x: targetPos.x + PLAYER_WIDTH / 2,
+                  y: targetPos.y + PLAYER_HEIGHT / 2,
+                  type: 'throw',
+                  time: performance.now()
+              };
+          }
+          
+          // Set a timeout to reset the thrown state
+          setTimeout(() => {
+              if (playerAnimations[targetId].state === THROWN) {
+                  playerAnimations[targetId].state = IDLE;
+              }
+          }, THROW_STUN_DURATION);
+      }
+
+      // Check if a special move combo is valid
+      function checkSpecialMoveCombo(playerId, combo) {
+          // Player 1 special move: hit, hit, kick
+          if (playerId === 'player1' && 
+              combo.length >= 3 && 
+              combo[combo.length-3] === 'hit' && 
+              combo[combo.length-2] === 'hit' && 
+              combo[combo.length-1] === 'kick') {
+              return true;
+          }
+          
+          // Player 2 special move: kick, kick, hit
+          if (playerId === 'player2' && 
+              combo.length >= 3 && 
+              combo[combo.length-3] === 'kick' && 
+              combo[combo.length-2] === 'kick' && 
+              combo[combo.length-1] === 'hit') {
+              return true;
+          }
+          
+          return false;
+      }
+
+      // Execute a special move
+      function executeSpecialMove(playerId) {
+          if (!players[playerId]) return;
+          
+          // Check cooldown
+          if (specialMoveCooldowns[playerId] > 0) {
+              debug(`${playerId} special move on cooldown`);
+              return;
+          }
+          
+          // Set special move state
+          playerAnimations[playerId].state = SPECIAL_ATTACK;
+          playerAnimations[playerId].specialAttackFrame = 0;
+          
+          // Start cooldown
+          specialMoveCooldowns[playerId] = SPECIAL_MOVE_COOLDOWN;
+          
+          // Play special move sound
+          playSound('special');
+          
+          // Clear the combo sequence
+          buttonCombos[playerId].sequence = [];
+          
+          // Check for hit on opponent
+          const opponentId = playerId === 'player1' ? 'player2' : 'player1';
+          const attackerHitbox = calculateHitboxes(playerId);
+          const targetHitbox = calculateHitboxes(opponentId);
+          
+          if (attackerHitbox && targetHitbox) {
+              // Special moves have extended range
+              const specialRange = 80;
+              const dx = attackerHitbox.body.x - targetHitbox.body.x;
+              const dy = attackerHitbox.body.y - targetHitbox.body.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < specialRange) {
+                  // Check if target is invulnerable
+                  if (!targetHitbox.invulnerable) {
+                      // Apply special move damage
+                      if (socket) {
+                          socket.emit('registerHit', {
+                              attackerId: playerId,
+                              targetId: opponentId,
+                              damage: SPECIAL_MOVE_DAMAGE,
+                              hitZone: 'special',
+                              blocked: targetHitbox.blocking
+                          });
+                      }
+                      
+                      // Show special hit feedback
+                      hitFeedback = {
+                          active: true,
+                          x: targetHitbox.body.x,
+                          y: targetHitbox.body.y,
+                          type: 'special',
+                          time: performance.now()
+                      };
+                  } else {
+                      // Target is invulnerable
+                      hitFeedback = {
+                          active: true,
+                          x: targetHitbox.body.x,
+                          y: targetHitbox.body.y,
+                          type: 'invulnerable',
+                          time: performance.now()
+                      };
+                      
+                      playSound('invulnerable');
+                  }
+              }
+          }
+      }
+
+      // Attempt to grab the opponent
+      function attemptGrab(playerId) {
+          if (!players[playerId]) return;
+          
+          // Can't grab if already grabbing or being grabbed
+          if (grabStates[playerId].isGrabbing || grabStates[playerId].isBeingGrabbed) {
+              return;
+          }
+          
+          // Set grab attempt state
+          playerAnimations[playerId].state = GRAB_ATTEMPT;
+          
+          // Check for opponent in grab range
+          const opponentId = playerId === 'player1' ? 'player2' : 'player1';
+          const attackerHitbox = calculateHitboxes(playerId);
+          const targetHitbox = calculateHitboxes(opponentId);
+          
+          if (attackerHitbox && targetHitbox) {
+              const dx = attackerHitbox.body.x - targetHitbox.body.x;
+              const dy = attackerHitbox.body.y - targetHitbox.body.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+              
+              if (distance < GRAB_RANGE) {
+                  // Check if target is invulnerable or blocking
+                  if (!targetHitbox.invulnerable && !targetHitbox.blocking) {
+                      // Successful grab
+                      grabStates[playerId].isGrabbing = true;
+                      grabStates[playerId].grabTarget = opponentId;
+                      grabStates[playerId].grabStartTime = performance.now();
+                      
+                      grabStates[opponentId].isBeingGrabbed = true;
+                      
+                      // Set animation states
+                      playerAnimations[playerId].state = GRAB_ATTEMPT;
+                      playerAnimations[opponentId].state = GRABBED;
+                      
+                      // Play grab sound
+                      playSound('grab');
+                      
+                      debug(`${playerId} grabbed ${opponentId}`);
+                  } else {
+                      // Failed grab due to invulnerability or blocking
+                      setTimeout(() => {
+                          if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
+                              playerAnimations[playerId].state = IDLE;
+                          }
+                      }, 300);
+                  }
+              } else {
+                  // Failed grab due to distance
+                  setTimeout(() => {
+                      if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
+                          playerAnimations[playerId].state = IDLE;
+                      }
+                  }, 300);
+              }
+          }
+      }
+
+      // Attempt to escape from being grabbed
+      function attemptGrabEscape(playerId) {
+          if (!grabStates[playerId].isBeingGrabbed) return;
+          
+          // Increment escape attempts
+          grabStates[playerId].escapeAttempts++;
+          
+          // Calculate escape chance based on attempts
+          const escapeChance = grabStates[playerId].escapeAttempts * (10 / GRAB_ESCAPE_DIFFICULTY);
+          
+          // Random check for escape
+          if (Math.random() * 100 < escapeChance) {
+              // Successful escape
+              const grabberId = playerId === 'player1' ? 'player2' : 'player1';
+              
+              // Reset grab states
+              grabStates[grabberId].isGrabbing = false;
+              grabStates[grabberId].grabTarget = null;
+              grabStates[playerId].isBeingGrabbed = false;
+              grabStates[playerId].escapeAttempts = 0;
+              
+              // Reset animation states
+              playerAnimations[grabberId].state = IDLE;
+              playerAnimations[playerId].state = IDLE;
+              
+              debug(`${playerId} escaped from grab`);
+          }
+      }
+
+      // Handle button press for grab escape
+      function handleGrabEscapeButtonPress(playerId) {
+          if (grabStates[playerId].isBeingGrabbed) {
+              // Send grab escape attempt to server
+              if (socket) {
+                  socket.emit('grabEscape', { playerId: playerId });
+              }
+              
+              // Also try locally
+              attemptGrabEscape(playerId);
           }
       }
 
@@ -1751,7 +2317,8 @@
           if (!p1Hitbox || !p2Hitbox) return;
           
           // Check player 1 attacking player 2
-          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT) {
+          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT && 
+              !grabStates.player1.isBeingGrabbed && !grabStates.player2.isBeingGrabbed) {
               const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
               if (hit) {
                   // NEW: Check if target is invulnerable
@@ -1774,7 +2341,8 @@
           }
           
           // Check player 2 attacking player 1
-          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT) {
+          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT && 
+              !grabStates.player2.isBeingGrabbed && !grabStates.player1.isBeingGrabbed) {
               const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
               if (hit) {
                   // NEW: Check if target is invulnerable
@@ -1913,6 +2481,15 @@
               // Blocked hit effect (yellow/gold burst)
               ctx.fillStyle = `rgba(255, 200, 50, ${opacity})`;
               ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+          } else if (hitFeedback.type === 'special') {
+              // Special move hit effect (purple/yellow burst)
+              ctx.fillStyle = `rgba(180, 50, 200, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
+          }
+          else if (hitFeedback.type === 'throw') {
+              // Throw hit effect (orange burst)
+              ctx.fillStyle = `rgba(255, 120, 0, ${opacity})`;
+              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
           } else if (hitFeedback.type === 'invulnerable') {
               // NEW: Invulnerable hit effect (blue burst)
               ctx.fillStyle = `rgba(74, 144, 226, ${opacity})`;
@@ -1991,6 +2568,81 @@
           ctx.strokeStyle = 'white';
           ctx.lineWidth = 2;
           ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+          
+          ctx.restore();
+      }
+
+      // Draw special move cooldown indicator
+      function showSpecialMoveCooldown(playerId) {
+          if (specialMoveCooldowns[playerId] <= 0) return;
+          
+          // Calculate cooldown percentage
+          const cooldownPercent = specialMoveCooldowns[playerId] / SPECIAL_MOVE_COOLDOWN;
+          
+          // Get player position
+          const playerPos = calculatePlayerScreenPosition(playerId);
+          if (!playerPos) return;
+          
+          // Draw cooldown indicator
+          ctx.save();
+          
+          // Background circle
+          ctx.beginPath();
+          ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fill();
+          
+          // Cooldown fill (clockwise from top)
+          ctx.beginPath();
+          ctx.moveTo(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
+          ctx.arc(
+              playerPos.x + PLAYER_WIDTH / 2, 
+              playerPos.y - 20, 
+              15, 
+              -Math.PI / 2, 
+              -Math.PI / 2 + (1 - cooldownPercent) * Math.PI * 2
+          );
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(180, 50, 200, 0.7)';
+          ctx.fill();
+          
+          // Border
+          ctx.beginPath();
+          ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
+          ctx.strokeStyle = 'white';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Special move icon
+          ctx.fillStyle = 'white';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('S', playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
+          
+          ctx.restore();
+      }
+
+      // Show grab escape instructions
+      function showGrabEscapeInstructions(playerId) {
+          if (!grabStates[playerId].isBeingGrabbed) return;
+          
+          // Get player position
+          const playerPos = calculatePlayerScreenPosition(playerId);
+          if (!playerPos) return;
+          
+          // Draw escape instructions
+          ctx.save();
+          
+          // Text background
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(playerPos.x - 40, playerPos.y - 40, 110, 25);
+          
+          // Text
+          ctx.fillStyle = 'white';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('Tap buttons to escape!', playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 25);
           
           ctx.restore();
       }
@@ -2263,6 +2915,187 @@
                   screenY + 80 + yOffset
               );
               ctx.stroke();
+          } else if (anim.state === SPECIAL_ATTACK) {
+              // Special attack animation
+              const facingLeft = playerId === 'player2';
+              
+              // Animate special attack (spinning attack)
+              const spinAngle = anim.specialAttackFrame * 0.5;
+              anim.specialAttackFrame += 0.2;
+              
+              // Rotate the entire player for spin attack
+              const centerX = screenX + PLAYER_WIDTH / 2;
+              const centerY = screenY + PLAYER_HEIGHT / 2;
+              
+              ctx.translate(centerX, centerY);
+              ctx.rotate(spinAngle);
+              ctx.translate(-centerX, -centerY);
+              
+              // Draw extended arms for special attack
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 25, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 25, screenY + 15 + yOffset);
+              ctx.stroke();
+              
+              // Draw special effect
+              ctx.beginPath();
+              ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + PLAYER_HEIGHT / 2, 30, 0, Math.PI * 2);
+              ctx.fillStyle = playerId === 'player1' ? 'rgba(255, 50, 50, 0.3)' : 'rgba(50, 50, 255, 0.3)';
+              ctx.fill();
+              
+              // Reset special attack after a full rotation
+              if (spinAngle > Math.PI * 2) {
+                  anim.specialAttackFrame = 0;
+                  // This will be reset to IDLE by the server state update
+              }
+              
+              // Legs in wide stance
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
+              ctx.stroke();
+          }
+          else if (anim.state === GRAB_ATTEMPT) {
+              // Grab attempt animation - arms reaching forward
+              const facingLeft = playerId === 'player2';
+              
+              // Arms reaching forward
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -20 : 20),
+                  screenY + 25 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -20 : 20),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Legs in stable stance
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 10, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 10, screenY + 80 + yOffset);
+              ctx.stroke();
+          }
+          else if (anim.state === GRABBED) {
+              // Being grabbed animation - arms pinned
+              
+              // Arms pinned to sides
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 5, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 5, screenY + 55 + yOffset);
+              ctx.stroke();
+              
+              // Legs slightly bent
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 8, screenY + 75 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 8, screenY + 75 + yOffset);
+              ctx.stroke();
+          }
+          else if (anim.state === THROWING) {
+              // Throwing animation - arms extended forcefully
+              const facingLeft = playerId === 'player2';
+              
+              // Arms extended in throwing motion
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -30 : 30),
+                  screenY + 25 + yOffset
+              );
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(
+                  screenX + PLAYER_WIDTH / 2 + (facingLeft ? -25 : 25),
+                  screenY + 45 + yOffset
+              );
+              ctx.stroke();
+              
+              // Legs in wide stance
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 15, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 15, screenY + 80 + yOffset);
+              ctx.stroke();
+              
+              // Reset to idle after animation completes
+              anim.throwFrame++;
+              if (anim.throwFrame > 10) {
+                  anim.throwFrame = 0;
+                  anim.state = IDLE;
+              }
+          }
+          else if (anim.state === THROWN) {
+              // Being thrown animation - tumbling in air
+              
+              // Rotate the player to show tumbling
+              const centerX = screenX + PLAYER_WIDTH / 2;
+              const centerY = screenY + PLAYER_HEIGHT / 2;
+              
+              ctx.translate(centerX, centerY);
+              ctx.rotate(anim.thrownFrame * 0.3);
+              ctx.translate(-centerX, -centerY);
+              
+              // Arms flailing
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 20, screenY + 25 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 35 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 20, screenY + 45 + yOffset);
+              ctx.stroke();
+              
+              // Legs flailing
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 - 20, screenY + 65 + yOffset);
+              ctx.stroke();
+              
+              ctx.beginPath();
+              ctx.moveTo(screenX + PLAYER_WIDTH / 2, screenY + 55 + yOffset);
+              ctx.lineTo(screenX + PLAYER_WIDTH / 2 + 20, screenY + 75 + yOffset);
+              ctx.stroke();
+              
+              // Increment thrown animation frame
+              anim.thrownFrame++;
           } else {
               // Default idle pose
               
