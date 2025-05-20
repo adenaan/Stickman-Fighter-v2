@@ -818,6 +818,24 @@
                   if (players.player2 && players.player2.isInvulnerable === undefined) {
                       players.player2.isInvulnerable = false;
                   }
+
+                  // NEW: Add special move properties if they don't exist
+                  if (players.player1 && players.player1.specialMove === undefined) {
+                      players.player1.specialMove = false;
+                  }
+                  if (players.player2 && players.player2.specialMove === undefined) {
+                      players.player2.specialMove = false;
+                  }
+
+                  // NEW: Add grab/throw properties if they don't exist
+                  if (players.player1 && players.player1.isGrabbing === undefined) {
+                      players.player1.isGrabbing = false;
+                      players.player1.grabTarget = null;
+                  }
+                  if (players.player2 && players.player2.isGrabbing === undefined) {
+                      players.player2.isGrabbing = false;
+                      players.player2.grabTarget = null;
+                  }
                   
                   // Check if a player's health just reached zero
                   const player1Defeated = prevPlayer1Power > 0 && players.player1.power <= 0;
@@ -1023,6 +1041,41 @@
                   if (!gameStarted || !data.playerId) return;
                   
                   attemptGrabEscape(data.playerId);
+              });
+
+              // Handle special move events
+              socket.on('specialMove', function(data) {
+                  if (!gameStarted || !data.playerId) return;
+                  
+                  // Update player state for special move
+                  if (players[data.playerId]) {
+                      players[data.playerId].state = SPECIAL_ATTACK;
+                      playerAnimations[data.playerId].state = SPECIAL_ATTACK;
+                      playerAnimations[data.playerId].specialAttackFrame = 0;
+                      
+                      // Play special move sound
+                      playSound('special');
+                  }
+              });
+
+              // Handle throw events
+              socket.on('throwPlayer', function(data) {
+                  if (!gameStarted || !data.targetId) return;
+                  
+                  // Update player position after being thrown
+                  if (players[data.targetId]) {
+                      players[data.targetId].x += data.throwDistance;
+                      
+                      // Constrain to game boundaries
+                      players[data.targetId].x = Math.max(0, Math.min(800, players[data.targetId].x));
+                      
+                      // Update animation state
+                      playerAnimations[data.targetId].state = THROWN;
+                      playerAnimations[data.attackerId].state = THROWING;
+                      
+                      // Play throw sound
+                      playSound('throw');
+                  }
               });
           } catch (error) {
               console.error('Error connecting to server:', error);
@@ -1332,6 +1385,7 @@
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+              trackButtonPress(playerId, 'hit');
           });
           
           newKickBtn.addEventListener('touchstart', function(e) {
@@ -1342,6 +1396,7 @@
               e.preventDefault();
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+              trackButtonPress(playerId, 'kick');
           });
           
           newBlockBtn.addEventListener('touchstart', function(e) {
@@ -1446,6 +1501,7 @@
               }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'hit'});
+              trackButtonPress(playerId, 'hit');
           });
           
           newKickBtn.addEventListener('mousedown', function(e) {
@@ -1455,6 +1511,7 @@
               }
               this.classList.add('active');
               if (socket && !gameEnding) socket.emit('attack', {type: 'kick'});
+              trackButtonPress(playerId, 'kick');
           });
           
           newBlockBtn.addEventListener('mousedown', function(e) {
@@ -1751,300 +1808,50 @@
               }
           }
       }
-      
-      function setupRestartButton() {
-          const restartBtn = document.getElementById('restartBtn');
+
+      // Track button presses for combo detection
+      function trackButtonPress(playerId, buttonType) {
+          // Don't track if on cooldown
+          if (specialMoveCooldowns[playerId] > 0) return;
           
-          // Add event handler for restart button
-          restartBtn.addEventListener('click', function(e) {
-              e.preventDefault();
-              e.stopPropagation();
-              
-              if (socket && playerId) {
-                  // Play button sound
-                  playSound('button');
-                  
-                  // Send player ready status to server
-                  socket.emit('playerReady', playerId);
-                  
-                  // Update button state
-                  this.textContent = 'Waiting for other player...';
-                  this.disabled = true;
-                  
-                  debug("Sent playerReady: " + playerId);
-              }
-          });
+          // Update the sequence
+          buttonCombos[playerId].sequence.push(buttonType);
+          buttonCombos[playerId].lastPressTime = performance.now();
+          
+          // Limit sequence length
+          if (buttonCombos[playerId].sequence.length > 5) {
+              buttonCombos[playerId].sequence.shift();
+          }
+          
+          // Check for special move combo
+          if (checkSpecialMoveCombo(playerId)) {
+              executeSpecialMove(playerId);
+          }
       }
       
-      function gameLoop(timestamp) {
-          // Calculate delta time for smooth animations
-          const deltaTime = timestamp - lastTime;
-          lastTime = timestamp;
-          
-          // Update animation frame
-          animationFrame += ANIMATION_SPEED * (deltaTime / 16.67); // Normalize to ~60fps
-          
-          // Update player animations
-          updatePlayerAnimations(deltaTime);
-          
-          // Update block cooldowns
-          updateBlockCooldowns(deltaTime);
-
-          // Update special move cooldowns
-          updateSpecialMoveCooldowns(deltaTime);
-
-          // Update grab states
-          updateGrabStates(deltaTime);
-          
-          // Update hit detection (only if game is active and not ending)
-          if (gameStarted && !gameEnding) {
-              checkHits();
-          }
-          
-          // Clear canvas
-          ctx.clearRect(0, 0, gameWidth, gameHeight);
-          
-          // Draw game elements
-          drawBackground();
-
-          // Always draw players, even if game is not started
-          if (players.player1 && players.player2) {
-              drawPlayers();
-          }
-
-          // Draw hit feedback and power bars if game is active or ending
-          if (gameStarted || gameEnding) {
-              drawHitFeedback();
-              drawPowerBars();
-
-              // Draw special move cooldowns
-              if (specialMoveCooldowns.player1 > 0) {
-                  showSpecialMoveCooldown('player1');
-              }
-              if (specialMoveCooldowns.player2 > 0) {
-                  showSpecialMoveCooldown('player2');
-              }
-              // drawHitboxes(); // Uncomment for debugging
-          }
-
-          // Show grab escape instructions
-          if (gameStarted && !gameEnding) {
-              if (grabStates.player1.isBeingGrabbed) {
-                  showGrabEscapeInstructions('player1');
-              }
-              if (grabStates.player2.isBeingGrabbed) {
-                  showGrabEscapeInstructions('player2');
-              }
-          }
-          
-          // Continue the game loop
-          requestAnimationFrame(gameLoop);
-      }
-      
-      // Update block cooldowns
-      function updateBlockCooldowns(deltaTime) {
-          // Update player 1 cooldown
-          if (blockCooldowns.player1 > 0) {
-              blockCooldowns.player1 -= deltaTime;
-              if (blockCooldowns.player1 < 0) blockCooldowns.player1 = 0;
-              
-              // Update cooldown display
-              updateBlockCooldown('player1', 1 - (blockCooldowns.player1 / BLOCK_COOLDOWN));
-          }
-          
-          // Update player 2 cooldown
-          if (blockCooldowns.player2 > 0) {
-              blockCooldowns.player2 -= deltaTime;
-              if (blockCooldowns.player2 < 0) blockCooldowns.player2 = 0;
-              
-              // Update cooldown display
-              updateBlockCooldown('player2', 1 - (blockCooldowns.player2 / BLOCK_COOLDOWN));
-          }
-          
-          // Check if block duration has expired
-          const now = performance.now();
-          
-          // Player 1 block duration check
-          if (playerAnimations.player1.state === BLOCKING && 
-              now - playerAnimations.player1.blockStart > BLOCK_DURATION) {
-              // Auto-release block after duration
-              if (socket && playerId === 'player1') {
-                  socket.emit('block', {blocking: false});
-              }
-          }
-          
-          // Player 2 block duration check
-          if (playerAnimations.player2.state === BLOCKING && 
-              now - playerAnimations.player2.blockStart > BLOCK_DURATION) {
-              // Auto-release block after duration
-              if (socket && playerId === 'player2') {
-                  socket.emit('block', {blocking: false});
-              }
-          }
-      }
-
-      // Update special move cooldowns
-      function updateSpecialMoveCooldowns(deltaTime) {
-          // Update player 1 cooldown
-          if (specialMoveCooldowns.player1 > 0) {
-              specialMoveCooldowns.player1 -= deltaTime;
-              if (specialMoveCooldowns.player1 < 0) specialMoveCooldowns.player1 = 0;
-          }
-          
-          // Update player 2 cooldown
-          if (specialMoveCooldowns.player2 > 0) {
-              specialMoveCooldowns.player2 -= deltaTime;
-              if (specialMoveCooldowns.player2 < 0) specialMoveCooldowns.player2 = 0;
-          }
-      }
-
-      // Update grab states
-      function updateGrabStates(deltaTime) {
-          const now = performance.now();
-          
-          // Check player 1 grab state
-          if (grabStates.player1.isGrabbing && grabStates.player1.grabTarget) {
-              // Check if grab duration has expired - time to throw
-              if (now - grabStates.player1.grabStartTime > GRAB_DURATION) {
-                  executeThrow('player1', grabStates.player1.grabTarget);
-              }
-          }
-          
-          // Check player 2 grab state
-          if (grabStates.player2.isGrabbing && grabStates.player2.grabTarget) {
-              // Check if grab duration has expired - time to throw
-              if (now - grabStates.player2.grabStartTime > GRAB_DURATION) {
-                  executeThrow('player2', grabStates.player2.grabTarget);
-              }
-          }
-      }
-
-      // Update player animations
-      function updatePlayerAnimations(deltaTime) {
-          // Update player 1 animations
-          updatePlayerAnimation('player1', deltaTime);
-          
-          // Update player 2 animations
-          updatePlayerAnimation('player2', deltaTime);
-      }
-      
-      // Update individual player animation
-      function updatePlayerAnimation(playerId, deltaTime) {
-          const anim = playerAnimations[playerId];
-          
-          // Update breathing animation for idle
-          if (anim.state === IDLE) {
-              anim.breatheOffset += anim.breatheDirection * 0.02 * (deltaTime / 16.67);
-              
-              // Reverse direction at limits
-              if (anim.breatheOffset > 1) {
-                  anim.breatheOffset = 1;
-                  anim.breatheDirection = -1;
-              } else if (anim.breatheOffset < -1) {
-                  anim.breatheOffset = -1;
-                  anim.breatheDirection = 1;
-              }
-          }
-          
-          // Update walking animation
-          if (anim.state === WALKING) {
-              anim.walkCycle += 0.1 * (deltaTime / 16.67);
-              if (anim.walkCycle > Math.PI * 2) {
-                  anim.walkCycle -= Math.PI * 2;
-              }
-          }
-          
-          // Update hurt animation
-          if (anim.state === HURT) {
-              anim.hurtAngle += anim.hurtDirection * 0.2 * (deltaTime / 16.67);
-              
-              // Limit the hurt angle
-              if (Math.abs(anim.hurtAngle) > Math.PI / 6) {
-                  anim.hurtDirection *= -0.7; // Bounce back with damping
-              }
-          }
-          
-          // Update victory animation
-          if (anim.state === VICTORY) {
-              anim.victoryJump += 0.1 * (deltaTime / 16.67);
-              if (anim.victoryJump > Math.PI * 2) {
-                  anim.victoryJump -= Math.PI * 2;
-              }
-          }
-          
-          // Update defeat animation
-          if (anim.state === DEFEAT) {
-              if (anim.defeatFall < 1) {
-                  anim.defeatFall += 0.02 * (deltaTime / 16.67);
-                  if (anim.defeatFall > 1) anim.defeatFall = 1;
-              }
-          }
-      }
-
-      // Execute a throw after grabbing
-      function executeThrow(attackerId, targetId) {
-          if (!players[attackerId] || !players[targetId]) return;
-          
-          // Set states
-          playerAnimations[attackerId].state = THROWING;
-          playerAnimations[targetId].state = THROWN;
-          
-          // Calculate throw direction
-          const throwDirection = attackerId === 'player1' ? 1 : -1;
-          
-          // Apply throw distance
-          players[targetId].x += THROW_DISTANCE * throwDirection;
-          
-          // Constrain to game boundaries
-          players[targetId].x = Math.max(0, Math.min(800, players[targetId].x));
-          
-          // Apply damage
-          if (socket) {
-              socket.emit('registerHit', {
-                  attackerId: attackerId,
-                  targetId: targetId,
-                  damage: THROW_DAMAGE,
-                  hitZone: 'throw',
-                  blocked: false
-              });
-          }
-          
-          // Play throw sound
-          playSound('throw');
-          
-          // Reset grab states
-          grabStates[attackerId].isGrabbing = false;
-          grabStates[attackerId].grabTarget = null;
-          grabStates[targetId].isBeingGrabbed = false;
-          
-          // Show throw feedback
-          const targetPos = calculatePlayerScreenPosition(targetId);
-          if (targetPos) {
-              hitFeedback = {
-                  active: true,
-                  x: targetPos.x + PLAYER_WIDTH / 2,
-                  y: targetPos.y + PLAYER_HEIGHT / 2,
-                  type: 'throw',
-                  time: performance.now()
-              };
-          }
-          
-          // Set a timeout to reset the thrown state
-          setTimeout(() => {
-              if (playerAnimations[targetId].state === THROWN) {
-                  playerAnimations[targetId].state = IDLE;
-              }
-          }, THROW_STUN_DURATION);
-      }
-
       // Check if a special move combo is valid
-      function checkSpecialMoveCombo(playerId, combo) {
+      function checkSpecialMoveCombo(playerId) {
+          const combo = buttonCombos[playerId].sequence;
+          const now = performance.now();
+          
+          // Check if combo is recent enough (all button presses within the time window)
+          if (combo.length < 3 || now - buttonCombos[playerId].lastPressTime > BUTTON_COMBO_TIMEOUT) {
+              // Reset combo if too old
+              if (now - buttonCombos[playerId].lastPressTime > BUTTON_COMBO_TIMEOUT) {
+                  buttonCombos[playerId].sequence = [];
+              }
+              return false;
+          }
+          
           // Player 1 special move: hit, hit, kick
           if (playerId === 'player1' && 
               combo.length >= 3 && 
               combo[combo.length-3] === 'hit' && 
               combo[combo.length-2] === 'hit' && 
               combo[combo.length-1] === 'kick') {
+              
+              // Clear the combo after successful detection
+              buttonCombos[playerId].sequence = [];
               return true;
           }
           
@@ -2054,6 +1861,9 @@
               combo[combo.length-3] === 'kick' && 
               combo[combo.length-2] === 'kick' && 
               combo[combo.length-1] === 'hit') {
+              
+              // Clear the combo after successful detection
+              buttonCombos[playerId].sequence = [];
               return true;
           }
           
@@ -2080,8 +1890,10 @@
           // Play special move sound
           playSound('special');
           
-          // Clear the combo sequence
-          buttonCombos[playerId].sequence = [];
+          // Tell the server about the special move
+          if (socket) {
+              socket.emit('specialMove', { playerId: playerId });
+          }
           
           // Check for hit on opponent
           const opponentId = playerId === 'player1' ? 'player2' : 'player1';
@@ -2133,492 +1945,182 @@
           }
       }
 
-      // Attempt to grab the opponent
-      function attemptGrab(playerId) {
-          if (!players[playerId]) return;
+      // Execute a throw after grabbing
+      function executeThrow(attackerId, targetId) {
+          if (!players[attackerId] || !players[targetId]) return;
           
-          // Can't grab if already grabbing or being grabbed
-          if (grabStates[playerId].isGrabbing || grabStates[playerId].isBeingGrabbed) {
-              return;
+          // Set states
+          playerAnimations[attackerId].state = THROWING;
+          playerAnimations[targetId].state = THROWN;
+          
+          // Calculate throw direction
+          const throwDirection = attackerId === 'player1' ? 1 : -1;
+          
+          // Apply throw distance - send this to the server
+          if (socket) {
+              socket.emit('throwPlayer', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  throwDistance: THROW_DISTANCE * throwDirection
+              });
           }
           
-          // Set grab attempt state
-          playerAnimations[playerId].state = GRAB_ATTEMPT;
+          // Apply damage
+          if (socket) {
+              socket.emit('registerHit', {
+                  attackerId: attackerId,
+                  targetId: targetId,
+                  damage: THROW_DAMAGE,
+                  hitZone: 'throw',
+                  blocked: false
+              });
+          }
           
-          // Check for opponent in grab range
-          const opponentId = playerId === 'player1' ? 'player2' : 'player1';
-          const attackerHitbox = calculateHitboxes(playerId);
-          const targetHitbox = calculateHitboxes(opponentId);
+          // Play throw sound
+          playSound('throw');
           
-          if (attackerHitbox && targetHitbox) {
-              const dx = attackerHitbox.body.x - targetHitbox.body.x;
-              const dy = attackerHitbox.body.y - targetHitbox.body.y;
-              const distance = Math.sqrt(dx * dx + dy * dy);
-              
-              if (distance < GRAB_RANGE) {
-                  // Check if target is invulnerable or blocking
-                  if (!targetHitbox.invulnerable && !targetHitbox.blocking) {
-                      // Successful grab
-                      grabStates[playerId].isGrabbing = true;
-                      grabStates[playerId].grabTarget = opponentId;
-                      grabStates[playerId].grabStartTime = performance.now();
-                      
-                      grabStates[opponentId].isBeingGrabbed = true;
-                      
-                      // Set animation states
-                      playerAnimations[playerId].state = GRAB_ATTEMPT;
-                      playerAnimations[opponentId].state = GRABBED;
-                      
-                      // Play grab sound
-                      playSound('grab');
-                      
-                      debug(`${playerId} grabbed ${opponentId}`);
-                  } else {
-                      // Failed grab due to invulnerability or blocking
-                      setTimeout(() => {
-                          if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
-                              playerAnimations[playerId].state = IDLE;
-                          }
-                      }, 300);
-                  }
-              } else {
-                  // Failed grab due to distance
-                  setTimeout(() => {
-                      if (playerAnimations[playerId].state === GRAB_ATTEMPT) {
-                          playerAnimations[playerId].state = IDLE;
-                      }
-                  }, 300);
+          // Reset grab states
+          grabStates[attackerId].isGrabbing = false;
+          grabStates[attackerId].grabTarget = null;
+          grabStates[targetId].isBeingGrabbed = false;
+          
+          // Show throw feedback
+          const targetPos = calculatePlayerScreenPosition(targetId);
+          if (targetPos) {
+              hitFeedback = {
+                  active: true,
+                  x: targetPos.x + PLAYER_WIDTH / 2,
+                  y: targetPos.y + PLAYER_HEIGHT / 2,
+                  type: 'throw',
+                  time: performance.now()
+              };
+          }
+          
+          // Set a timeout to reset the thrown state
+          setTimeout(() => {
+              if (playerAnimations[targetId].state === THROWN) {
+                  playerAnimations[targetId].state = IDLE;
               }
-          }
+          }, THROW_STUN_DURATION);
       }
-
-      // Attempt to escape from being grabbed
-      function attemptGrabEscape(playerId) {
-          if (!grabStates[playerId].isBeingGrabbed) return;
+      
+      // Draw hitboxes for debugging
+      function drawHitboxes() {
+          if (!players.player1 || !players.player2) return;
           
-          // Increment escape attempts
-          grabStates[playerId].escapeAttempts++;
-          
-          // Calculate escape chance based on attempts
-          const escapeChance = grabStates[playerId].escapeAttempts * (10 / GRAB_ESCAPE_DIFFICULTY);
-          
-          // Random check for escape
-          if (Math.random() * 100 < escapeChance) {
-              // Successful escape
-              const grabberId = playerId === 'player1' ? 'player2' : 'player1';
-              
-              // Reset grab states
-              grabStates[grabberId].isGrabbing = false;
-              grabStates[grabberId].grabTarget = null;
-              grabStates[playerId].isBeingGrabbed = false;
-              grabStates[playerId].escapeAttempts = 0;
-              
-              // Reset animation states
-              playerAnimations[grabberId].state = IDLE;
-              playerAnimations[playerId].state = IDLE;
-              
-              debug(`${playerId} escaped from grab`);
-          }
-      }
-
-      // Handle button press for grab escape
-      function handleGrabEscapeButtonPress(playerId) {
-          if (grabStates[playerId].isBeingGrabbed) {
-              // Send grab escape attempt to server
-              if (socket) {
-                  socket.emit('grabEscape', { playerId: playerId });
-              }
-              
-              // Also try locally
-              attemptGrabEscape(playerId);
-          }
-      }
-
-      // Calculate hitboxes for a player
-      function calculateHitboxes(playerId) {
-          if (!players[playerId]) return null;
-          
-          const player = players[playerId];
-          const anim = playerAnimations[playerId];
-          const facingLeft = playerId === 'player2'; // Player 2 faces left
-          
-          // Calculate scale factor based on screen width
-          const scaleFactor = Math.min(1, gameWidth / 800);
-          const floorY = gameHeight - 50;
-          
-          // Adjust player positions for smaller screens
-          const screenX = Math.max(0, Math.min(gameWidth - PLAYER_WIDTH, player.x * scaleFactor));
-          const screenY = floorY - PLAYER_HEIGHT;
-          
-          // Apply animation offsets
-          let yOffset = 0;
-          if (anim.state === VICTORY) {
-              yOffset = -Math.abs(Math.sin(anim.victoryJump) * 20);
-          } else if (anim.state === DEFEAT) {
-              yOffset = anim.defeatFall * 20;
-          }
-          
-          // Calculate center point
-          const centerX = screenX + PLAYER_WIDTH / 2;
-          const headY = screenY + 10 + anim.breatheOffset + yOffset;
-          
-          // Calculate attack point (where hits land)
-          let attackX = centerX + (facingLeft ? -ARM_HITBOX_WIDTH : ARM_HITBOX_WIDTH);
-          let attackY = screenY + 25 + yOffset;
-          let attackRange = 10; // Default attack range
-
-          if (anim.state === HITTING) {
-              attackRange = 10;
-          } else if (anim.state === KICKING) {
-              // Extend kick range and adjust position
-              attackX = centerX + (facingLeft ? -LEG_HITBOX_WIDTH - 10 : LEG_HITBOX_WIDTH + 10);
-              attackY = screenY + 60 + yOffset;
-              attackRange = 15; // Larger range for kicks
-          }
-          
-          return {
-              id: playerId,
-              head: {
-                  x: centerX,
-                  y: headY,
-                  radius: HEAD_HITBOX_RADIUS
-              },
-              body: {
-                  x: centerX,
-                  y: screenY + 35 + yOffset,
-                  width: BODY_HITBOX_WIDTH,
-                  height: BODY_HITBOX_HEIGHT
-              },
-              attackPoint: {
-                  x: attackX,
-                  y: attackY,
-                  active: anim.state === HITTING || anim.state === KICKING,
-                  type: anim.state === HITTING ? 'hit' : 'kick',
-                  range: attackRange
-              },
-              blocking: anim.state === BLOCKING,
-              // NEW: Add invulnerability status to hitbox
-              invulnerable: player.isInvulnerable || false
-          };
-      }
-
-      // Check for hits between players
-      function checkHits() {
-          if (!gameStarted || !players.player1 || !players.player2 || gameEnding) return;
-          
-          // Don't check hits too frequently
-          const now = performance.now();
-          if (now - lastHitTime < HIT_COOLDOWN) return;
-          
-          // Calculate hitboxes
           const p1Hitbox = calculateHitboxes('player1');
           const p2Hitbox = calculateHitboxes('player2');
           
           if (!p1Hitbox || !p2Hitbox) return;
           
-          // Check player 1 attacking player 2
-          if (p1Hitbox.attackPoint.active && players.player1.state !== HURT && 
-              !grabStates.player1.isBeingGrabbed && !grabStates.player2.isBeingGrabbed) {
-              const hit = detectHit(p1Hitbox.attackPoint, p2Hitbox);
-              if (hit) {
-                  // NEW: Check if target is invulnerable
-                  if (!p2Hitbox.invulnerable) {
-                      applyHit('player1', 'player2', p1Hitbox.attackPoint, hit, p2Hitbox.blocking);
-                  } else {
-                      // Play invulnerable sound
-                      playSound('invulnerable');
-                      
-                      // Show invulnerable feedback
-                      hitFeedback = {
-                          active: true,
-                          x: hit.point.x,
-                          y: hit.point.y,
-                          type: 'invulnerable',
-                          time: performance.now()
-                      };
-                  }
-              }
-          }
-          
-          // Check player 2 attacking player 1
-          if (p2Hitbox.attackPoint.active && players.player2.state !== HURT && 
-              !grabStates.player2.isBeingGrabbed && !grabStates.player1.isBeingGrabbed) {
-              const hit = detectHit(p2Hitbox.attackPoint, p1Hitbox);
-              if (hit) {
-                  // NEW: Check if target is invulnerable
-                  if (!p1Hitbox.invulnerable) {
-                      applyHit('player2', 'player1', p2Hitbox.attackPoint, hit, p1Hitbox.blocking);
-                  } else {
-                      // Play invulnerable sound
-                      playSound('invulnerable');
-                      
-                      // Show invulnerable feedback
-                      hitFeedback = {
-                          active: true,
-                          x: hit.point.x,
-                          y: hit.point.y,
-                          type: 'invulnerable',
-                          time: performance.now()
-                      };
-                  }
-              }
-          }
-      }
-
-      // Detect if an attack point hits a hitbox
-      function detectHit(attackPoint, targetHitbox) {
-          // Get attack range (or default to 10)
-          const range = attackPoint.range || 10;
-          
-          // Check head hit (circular collision)
-          const dx = attackPoint.x - targetHitbox.head.x;
-          const dy = attackPoint.y - targetHitbox.head.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance < targetHitbox.head.radius + range) {
-              return { zone: 'head', point: { x: targetHitbox.head.x, y: targetHitbox.head.y } };
-          }
-          
-          // Check body hit (rectangular collision with expanded range)
-          const bodyLeft = targetHitbox.body.x - targetHitbox.body.width / 2 - range;
-          const bodyRight = targetHitbox.body.x + targetHitbox.body.width / 2 + range;
-          const bodyTop = targetHitbox.body.y - targetHitbox.body.height / 2 - range;
-          const bodyBottom = targetHitbox.body.y + targetHitbox.body.height / 2 + range;
-          
-          if (attackPoint.x >= bodyLeft && attackPoint.x <= bodyRight &&
-              attackPoint.y >= bodyTop && attackPoint.y <= bodyBottom) {
-              return { zone: 'body', point: { x: attackPoint.x, y: attackPoint.y } };
-          }
-          
-          return null;
-      }
-
-      // Apply hit effects
-      function applyHit(attackerId, targetId, attackPoint, hit, isBlocking) {
-          // Don't register hits if the game is over
-          if (gameEnding || document.getElementById('winnerMessage').style.display === 'block') return;
-          
-          lastHitTime = performance.now();
-          
-          // Calculate damage based on attack type and hit zone
-          let damage = attackPoint.type === 'hit' ? HIT_DAMAGE : KICK_DAMAGE;
-          
-          // Critical hit for headshots
-          if (hit.zone === 'head') {
-              damage *= CRITICAL_HIT_MULTIPLIER;
-          }
-          
-          // Reduce damage if blocking
-          if (isBlocking) {
-              damage *= (1 - BLOCK_DAMAGE_REDUCTION);
-              
-              // Play block hit sound
-              playSound('blockHit');
-          }
-          
-          // NEW: Update combo counter
-          const now = performance.now();
-          const timeSinceLastHit = now - lastHitTimes[targetId];
-          
-          // Reset combo if it's been a while since the last hit
-          if (timeSinceLastHit > COMBO_RESET_TIME) {
-              comboCounts[attackerId] = 0;
-          }
-          
-          // Increment combo counter
-          comboCounts[attackerId]++;
-          
-          // Update last hit time
-          lastHitTimes[targetId] = now;
-          
-          // Send attack to server
-          if (socket) {
-              socket.emit('registerHit', {
-                  attackerId: attackerId,
-                  targetId: targetId,
-                  damage: damage,
-                  hitZone: hit.zone,
-                  blocked: isBlocking,
-                  comboCount: comboCounts[attackerId] // NEW: Send combo count
-              });
-          }
-          
-          // Show hit feedback
-          hitFeedback = {
-              active: true,
-              x: hit.point.x,
-              y: hit.point.y,
-              type: isBlocking ? 'blocked' : (hit.zone === 'head' ? 'critical' : 'normal'),
-              time: performance.now()
-          };
-      }
-
-      // Draw hit feedback
-      function drawHitFeedback() {
-          if (!hitFeedback.active) return;
-          
-          const now = performance.now();
-          const elapsed = now - hitFeedback.time;
-          
-          if (elapsed > HIT_FEEDBACK_DURATION) {
-              hitFeedback.active = false;
-              return;
-          }
-          
-          // Calculate animation progress (0 to 1)
-          const progress = elapsed / HIT_FEEDBACK_DURATION;
-          const size = 20 + progress * 30;
-          const opacity = 1 - progress;
-          
           ctx.save();
           
-          // Draw hit effect
-          if (hitFeedback.type === 'critical') {
-              // Critical hit effect (red burst)
-              ctx.fillStyle = `rgba(255, 50, 50, ${opacity})`;
-              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
-          } else if (hitFeedback.type === 'blocked') {
-              // Blocked hit effect (yellow/gold burst)
-              ctx.fillStyle = `rgba(255, 200, 50, ${opacity})`;
-              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-          } else if (hitFeedback.type === 'special') {
-              // Special move hit effect (purple/yellow burst)
-              ctx.fillStyle = `rgba(180, 50, 200, ${opacity})`;
-              ctx.strokeStyle = `rgba(255, 255, 0, ${opacity})`;
-          }
-          else if (hitFeedback.type === 'throw') {
-              // Throw hit effect (orange burst)
-              ctx.fillStyle = `rgba(255, 120, 0, ${opacity})`;
-              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-          } else if (hitFeedback.type === 'invulnerable') {
-              // NEW: Invulnerable hit effect (blue burst)
-              ctx.fillStyle = `rgba(74, 144, 226, ${opacity})`;
-              ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-          } else {
-              // Normal hit effect (white burst)
-              ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
-              ctx.strokeStyle = `rgba(200, 200, 200, ${opacity})`;
-          }
+          // Draw player 1 hitboxes
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+          ctx.lineWidth = 2;
           
-          // Draw burst
+          // Head
           ctx.beginPath();
-          ctx.arc(hitFeedback.x, hitFeedback.y, size / 2, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
+          ctx.stroke();
           
-          // Draw impact lines
-          ctx.lineWidth = 3;
-          for (let i = 0; i < 8; i++) {
-              const angle = Math.PI * 2 * i / 8;
-              const innerRadius = size / 2;
-              const outerRadius = size;
-              
+          // Body
+          ctx.strokeRect(
+              p1Hitbox.body.x - p1Hitbox.body.width / 2,
+              p1Hitbox.body.y - p1Hitbox.body.height / 2,
+              p1Hitbox.body.width,
+              p1Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p1Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
               ctx.beginPath();
-              ctx.moveTo(
-                  hitFeedback.x + Math.cos(angle) * innerRadius,
-                  hitFeedback.y + Math.sin(angle) * innerRadius
-              );
-              ctx.lineTo(
-                  hitFeedback.x + Math.cos(angle) * outerRadius,
-                  hitFeedback.y + Math.sin(angle) * outerRadius
-              );
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
               ctx.stroke();
           }
           
-          ctx.restore();
-      }
-
-      // Draw power bars
-      function drawPowerBars() {
-          if (!players.player1 || !players.player2) return;
+          // Draw block area if blocking
+          if (p1Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p1Hitbox.body.x + 15, p1Hitbox.body.y, 20, 0, Math.PI * 2);
+              ctx.stroke();
+          }
           
-          const barWidth = Math.min(300, gameWidth * 0.4);
-          const barHeight = 20;
-          const margin = 10;
+          // NEW: Draw invulnerability indicator
+          if (p1Hitbox.invulnerable) {
+              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.rect(
+                  p1Hitbox.body.x - 25,
+                  p1Hitbox.head.y - 20,
+                  50,
+                  p1Hitbox.body.y + p1Hitbox.body.height / 2 - p1Hitbox.head.y + 30
+              );
+              ctx.stroke();
+              ctx.setLineDash([]);
+          }
           
-          ctx.save();
+          // Draw player 2 hitboxes
+          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
           
-          // Player 1 power bar (left side)
-          const p1Power = players.player1.power / MAX_POWER;
-          
-          // Bar background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.fillRect(margin, margin, barWidth, barHeight);
-          
-          // Bar fill
-          ctx.fillStyle = p1Power > 0.3 ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 50, 50, 0.4)';
-          ctx.fillRect(margin, margin, barWidth * p1Power, barHeight);
-          
-          // Bar border
-          ctx.strokeStyle = 'white';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(margin, margin, barWidth, barHeight);
-          
-          // Player 2 power bar (right side)
-          const p2Power = players.player2.power / MAX_POWER;
-          
-          // Bar background
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          // Bar fill (right-aligned)
-          ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
-          ctx.fillRect(gameWidth - margin - barWidth * p2Power, margin, barWidth * p2Power, barHeight);
-          
-          // Bar border
-          ctx.strokeStyle = 'white';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
-          
-          ctx.restore();
-      }
-
-      // Draw special move cooldown indicator
-      function showSpecialMoveCooldown(playerId) {
-          if (specialMoveCooldowns[playerId] <= 0) return;
-          
-          // Calculate cooldown percentage
-          const cooldownPercent = specialMoveCooldowns[playerId] / SPECIAL_MOVE_COOLDOWN;
-          
-          // Get player position
-          const playerPos = calculatePlayerScreenPosition(playerId);
-          if (!playerPos) return;
-          
-          // Draw cooldown indicator
-          ctx.save();
-          
-          // Background circle
+          // Head
           ctx.beginPath();
-          ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-          ctx.fill();
-          
-          // Cooldown fill (clockwise from top)
-          ctx.beginPath();
-          ctx.moveTo(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
-          ctx.arc(
-              playerPos.x + PLAYER_WIDTH / 2, 
-              playerPos.y - 20, 
-              15, 
-              -Math.PI / 2, 
-              -Math.PI / 2 + (1 - cooldownPercent) * Math.PI * 2
-          );
-          ctx.closePath();
-          ctx.fillStyle = 'rgba(180, 50, 200, 0.7)';
-          ctx.fill();
-          
-          // Border
-          ctx.beginPath();
-          ctx.arc(playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20, 15, 0, Math.PI * 2);
-          ctx.strokeStyle = 'white';
-          ctx.lineWidth = 2;
+          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
           ctx.stroke();
           
-          // Special move icon
-          ctx.fillStyle = 'white';
-          ctx.font = '12px Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('S', playerPos.x + PLAYER_WIDTH / 2, playerPos.y - 20);
+          // Body
+          ctx.strokeRect(
+              p2Hitbox.body.x - p2Hitbox.body.width / 2,
+              p2Hitbox.body.y - p2Hitbox.body.height / 2,
+              p2Hitbox.body.width,
+              p2Hitbox.body.height
+          );
+          
+          // Attack point
+          if (p2Hitbox.attackPoint.active) {
+              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
+              ctx.fill();
+              
+              // Draw attack range
+              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // Draw block area if blocking
+          if (p2Hitbox.blocking) {
+              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
+              ctx.beginPath();
+              ctx.arc(p2Hitbox.body.x - 15, p2Hitbox.body.y, 20, 0, Math.PI * 2);
+              ctx.stroke();
+          }
+          
+          // NEW: Draw invulnerability indicator
+          if (p2Hitbox.invulnerable) {
+              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
+              ctx.setLineDash([5, 5]);
+              ctx.beginPath();
+              ctx.rect(
+                  p2Hitbox.body.x - 25,
+                  p2Hitbox.head.y - 20,
+                  50,
+                  p2Hitbox.body.y + p2Hitbox.body.height / 2 - p2Hitbox.head.y + 30
+              );
+              ctx.stroke();
+              ctx.setLineDash([]);
+          }
           
           ctx.restore();
       }
@@ -2948,10 +2450,16 @@
               ctx.fillStyle = playerId === 'player1' ? 'rgba(255, 50, 50, 0.3)' : 'rgba(50, 50, 255, 0.3)';
               ctx.fill();
               
+              // Add a second glowing effect
+              ctx.beginPath();
+              ctx.arc(screenX + PLAYER_WIDTH / 2, screenY + PLAYER_HEIGHT / 2, 40, 0, Math.PI * 2);
+              ctx.fillStyle = playerId === 'player1' ? 'rgba(255, 50, 50, 0.1)' : 'rgba(50, 50, 255, 0.1)';
+              ctx.fill();
+              
               // Reset special attack after a full rotation
               if (spinAngle > Math.PI * 2) {
                   anim.specialAttackFrame = 0;
-                  // This will be reset to IDLE by the server state update
+                  anim.state = IDLE;
               }
               
               // Legs in wide stance
@@ -3156,127 +2664,6 @@
           
           // Play victory sound
           playSound('victory');
-      }
-
-      // Draw hitboxes for debugging
-      function drawHitboxes() {
-          if (!players.player1 || !players.player2) return;
-          
-          const p1Hitbox = calculateHitboxes('player1');
-          const p2Hitbox = calculateHitboxes('player2');
-          
-          if (!p1Hitbox || !p2Hitbox) return;
-          
-          ctx.save();
-          
-          // Draw player 1 hitboxes
-          ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-          ctx.lineWidth = 2;
-          
-          // Head
-          ctx.beginPath();
-          ctx.arc(p1Hitbox.head.x, p1Hitbox.head.y, p1Hitbox.head.radius, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Body
-          ctx.strokeRect(
-              p1Hitbox.body.x - p1Hitbox.body.width / 2,
-              p1Hitbox.body.y - p1Hitbox.body.height / 2,
-              p1Hitbox.body.width,
-              p1Hitbox.body.height
-          );
-          
-          // Attack point
-          if (p1Hitbox.attackPoint.active) {
-              ctx.fillStyle = 'rgba(255, 0, 0, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Draw attack range
-              ctx.strokeStyle = 'rgba(255, 0, 0, 0.3)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.attackPoint.x, p1Hitbox.attackPoint.y, p1Hitbox.attackPoint.range, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // Draw block area if blocking
-          if (p1Hitbox.blocking) {
-              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p1Hitbox.body.x + 15, p1Hitbox.body.y, 20, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // NEW: Draw invulnerability indicator
-          if (p1Hitbox.invulnerable) {
-              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.rect(
-                  p1Hitbox.body.x - 25,
-                  p1Hitbox.head.y - 20,
-                  50,
-                  p1Hitbox.body.y + p1Hitbox.body.height / 2 - p1Hitbox.head.y + 30
-              );
-              ctx.stroke();
-              ctx.setLineDash([]);
-          }
-          
-          // Draw player 2 hitboxes
-          ctx.strokeStyle = 'rgba(0, 0, 255, 0.5)';
-          
-          // Head
-          ctx.beginPath();
-          ctx.arc(p2Hitbox.head.x, p2Hitbox.head.y, p2Hitbox.head.radius, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Body
-          ctx.strokeRect(
-              p2Hitbox.body.x - p2Hitbox.body.width / 2,
-              p2Hitbox.body.y - p2Hitbox.body.height / 2,
-              p2Hitbox.body.width,
-              p2Hitbox.body.height
-          );
-          
-          // Attack point
-          if (p2Hitbox.attackPoint.active) {
-              ctx.fillStyle = 'rgba(0, 0, 255, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, 5, 0, Math.PI * 2);
-              ctx.fill();
-              
-              // Draw attack range
-              ctx.strokeStyle = 'rgba(0, 0, 255, 0.3)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.attackPoint.x, p2Hitbox.attackPoint.y, p2Hitbox.attackPoint.range, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // Draw block area if blocking
-          if (p2Hitbox.blocking) {
-              ctx.strokeStyle = 'rgba(255, 200, 50, 0.7)';
-              ctx.beginPath();
-              ctx.arc(p2Hitbox.body.x - 15, p2Hitbox.body.y, 20, 0, Math.PI * 2);
-              ctx.stroke();
-          }
-          
-          // NEW: Draw invulnerability indicator
-          if (p2Hitbox.invulnerable) {
-              ctx.strokeStyle = 'rgba(74, 144, 226, 0.7)';
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.rect(
-                  p2Hitbox.body.x - 25,
-                  p2Hitbox.head.y - 20,
-                  50,
-                  p2Hitbox.body.y + p2Hitbox.body.height / 2 - p2Hitbox.head.y + 30
-              );
-              ctx.stroke();
-              ctx.setLineDash([]);
-          }
-          
-          ctx.restore();
       }
   </script>
 </body>
