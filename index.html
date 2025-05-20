@@ -1313,14 +1313,13 @@
           const playerControls = document.createElement('div');
           playerControls.className = 'player-controls';
           playerControls.innerHTML = `
-              <button class="control-btn move-btn" id="moveLeft">←</button>
-              <button class="control-btn move-btn" id="moveRight">→</button>
-              <button class="control-btn hit-btn" id="hitBtn">HIT</button>
-              <button class="control-btn kick-btn" id="kickBtn">KICK</button>
-              <button class="control-btn block-btn" id="blockBtn">BLOCK</button>
-              <button class="control-btn special-btn" id="specialBtn">SPECIAL</button>
-              <button class="control-btn grab-btn" id="grabBtn">GRAB</button>
-          `;
+      <button class="control-btn move-btn" id="moveLeft">←</button>
+      <button class="control-btn move-btn" id="moveRight">→</button>
+      <button class="control-btn hit-btn" id="hitBtn">HIT</button>
+      <button class="control-btn kick-btn" id="kickBtn">KICK</button>
+      <button class="control-btn block-btn" id="blockBtn">BLOCK</button>
+      <button class="control-btn grab-btn" id="grabBtn">GRAB</button>
+  `;
           
           controlsContainer.appendChild(playerControls);
           
@@ -1335,7 +1334,6 @@
           const hitBtn = document.getElementById('hitBtn');
           const kickBtn = document.getElementById('kickBtn');
           const blockBtn = document.getElementById('blockBtn');
-          const specialBtn = document.getElementById('specialBtn');
           const grabBtn = document.getElementById('grabBtn');
           
           // Clear any existing event listeners (just in case)
@@ -1344,7 +1342,6 @@
           hitBtn.replaceWith(hitBtn.cloneNode(true));
           kickBtn.replaceWith(kickBtn.cloneNode(true));
           blockBtn.replaceWith(blockBtn.cloneNode(true));
-          specialBtn.replaceWith(specialBtn.cloneNode(true));
           grabBtn.replaceWith(grabBtn.cloneNode(true));
           
           // Get the fresh elements
@@ -1353,7 +1350,6 @@
           const newHitBtn = document.getElementById('hitBtn');
           const newKickBtn = document.getElementById('kickBtn');
           const newBlockBtn = document.getElementById('blockBtn');
-          const newSpecialBtn = document.getElementById('specialBtn');
           const newGrabBtn = document.getElementById('grabBtn');
           
           // Add touch start event listeners
@@ -1412,18 +1408,6 @@
               }
           });
 
-          newSpecialBtn.addEventListener('touchstart', function(e) {
-              if (grabStates[playerId].isBeingGrabbed) {
-                  handleGrabEscapeButtonPress(playerId);
-                  return;
-              }
-              e.preventDefault();
-              this.classList.add('active');
-              if (socket && !gameEnding && specialMoveCooldowns[playerId] <= 0) {
-                  executeSpecialMove(playerId);
-              }
-          });
-
           newGrabBtn.addEventListener('touchstart', function(e) {
               if (grabStates[playerId].isBeingGrabbed) {
                   handleGrabEscapeButtonPress(playerId);
@@ -1463,11 +1447,6 @@
               e.preventDefault();
               this.classList.remove('active');
               if (socket && !gameEnding) socket.emit('block', {blocking: false});
-          });
-
-          newSpecialBtn.addEventListener('touchend', function(e) {
-              e.preventDefault();
-              this.classList.remove('active');
           });
 
           newGrabBtn.addEventListener('touchend', function(e) {
@@ -1526,17 +1505,6 @@
               }
           });
 
-          newSpecialBtn.addEventListener('mousedown', function(e) {
-              if (grabStates[playerId].isBeingGrabbed) {
-                  handleGrabEscapeButtonPress(playerId);
-                  return;
-              }
-              this.classList.add('active');
-              if (socket && !gameEnding && specialMoveCooldowns[playerId] <= 0) {
-                  executeSpecialMove(playerId);
-              }
-          });
-
           newGrabBtn.addEventListener('mousedown', function(e) {
               if (grabStates[playerId].isBeingGrabbed) {
                   handleGrabEscapeButtonPress(playerId);
@@ -1569,10 +1537,6 @@
           newBlockBtn.addEventListener('mouseup', function(e) {
               this.classList.remove('active');
               if (socket && !gameEnding) socket.emit('block', {blocking: false});
-          });
-
-          newSpecialBtn.addEventListener('mouseup', function(e) {
-              this.classList.remove('active');
           });
 
           newGrabBtn.addEventListener('mouseup', function(e) {
@@ -2539,7 +2503,7 @@ function drawPowerBars() {
     
     // Bar background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
+    ctx.fillRect(gameWidth - margin - barWidth, margin, barHeight);
     
     // Bar fill (right-aligned)
     ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
