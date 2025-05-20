@@ -1822,6 +1822,14 @@ function trackButtonPress(playerId, buttonType) {
 // Check if a special move combo is valid
 function checkSpecialMoveCombo(playerId) {
     const combo = buttonCombos[playerId].sequence;
+    if (checkSpecialMoveCombo(playerId)) {
+        executeSpecialMove(playerId);
+    }
+}
+
+// Check if a special move combo is valid
+function checkSpecialMoveCombo(playerId) {
+    const combo = buttonCombos[playerId].sequence;
     const now = performance.now();
     
     // Check if combo is recent enough (all button presses within the time window)
@@ -2503,7 +2511,7 @@ function drawPowerBars() {
     
     // Bar background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.fillRect(gameWidth - margin - barWidth, margin, barHeight);
+    ctx.fillRect(gameWidth - margin - barWidth, margin, barWidth, barHeight);
     
     // Bar fill (right-aligned)
     ctx.fillStyle = p2Power > 0.3 ? 'rgba(50, 50, 255, 0.8)' : 'rgba(50, 50, 255, 0.4)';
